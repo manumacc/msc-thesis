@@ -18,6 +18,9 @@ import sys
 
 import pandas as pd
 
+# Profiling
+from time import perf_counter
+
 
 class PerturbationScores:
 
@@ -479,17 +482,23 @@ class LocalExplanationModel:
         feature_maps = self.get_model_features(input_image)  # stacktrace
 
         hypercolumns = []
-        count = 0
         for convmap in feature_maps:
+
+            print("- feature_map shape:", convmap.shape)
 
             reshaped_convmap = convmap[0].transpose((2, 1, 0))
 
             for fmap in reshaped_convmap:
                 upscaled = np.array(Image.fromarray(fmap).resize(self.model_input_shape, Image.BILINEAR))
                 hypercolumns.append(upscaled)
-            count = count + 1
+
+            print("- upscaled shape:", upscaled.shape)
+            print("- len hypercolumns:", len(hypercolumns))
 
         hypercolumns = np.asarray(hypercolumns)
+
+        print("- hypercolumn shape:", hypercolumns.shape)
+
         return hypercolumns
 
     def _features_reduction(self, X):
@@ -498,40 +507,54 @@ class LocalExplanationModel:
         return X_r
 
     def extract_hypercolumns(self, input_image, verbose=False):
+        start = perf_counter()
         x = self.preprocess_func(input_image)
+        end = perf_counter()
+        print("preprocess_func total", end-start)
 
+        start = perf_counter()
         hc = self.get_hypercolumns(x)
-        # print("Hypecolumns shape:", hc.shape) if verbose else None
+        end = perf_counter()
+        print("get_hypercolumns total", end-start)
 
+        start = perf_counter()
         hc_t = hc.transpose([2, 1, 0]).reshape(self.model_input_shape[0] * self.model_input_shape[1], -1)  # e.g. 224*224 = 50176  color transpose, tensor reshape
-        # print("Hypecolumns reshaped:", hc_t.shape) if verbose else None
+        end = perf_counter()
+        print("transpose total", end-start)
 
+        start = perf_counter()
         hc_r = self._features_reduction(hc_t)
-        # print("Hypecolumns reduced:", hc_r.shape) if verbose else None
+        end = perf_counter()
+        print("_features_reduction total", end-start)
 
         return hc_r
 
     def compute_features_map(self, hc, n_features):
+        start = perf_counter()
         hc_n = normalize(hc, norm='l2', axis=1)
-        kmeans_model = KMeans(n_clusters=n_features, max_iter=300, n_jobs=-1, random_state=42)
+        kmeans_model = KMeans(n_clusters=n_features, max_iter=300, random_state=42)
         features_labels = kmeans_model.fit_predict(hc_n)
         features_map = features_labels.reshape(self.model_input_shape[0], self.model_input_shape[1]).astype(np.uint8)
         features_map += 1
+        end = perf_counter()
+        print("kmeans total", end-start)
         return features_map
 
     def fit_explanation(self, verbose=False):
-
         hc = self.extract_hypercolumns(self.input_image, verbose=verbose)
 
         for n_f in range(2, self.max_features+1):
             features_map = self.compute_features_map(hc, n_f)
             print(f"> Computing explanation with '{n_f}' features...") if verbose else None
 
+            start = perf_counter()
             local_expl_model = LocalExplanation(self.input_image, self.class_of_interest, features_map, self.model,
                                                 preprocess_func=self.preprocess_func)
 
             local_expl_model.fit_explanation()
             self.local_explanations[n_f] = local_expl_model
+            end = perf_counter()
+            print("fitting explanation total", end-start)
 
         self.best_explanation = self.compute_best_explanation()
 
@@ -544,102 +567,102 @@ class LocalExplanationModel:
         return max(self.local_explanations.values(), key=lambda x: x.informativeness)
 
 
-class ClassGlobalExplanationModel:
-
-    def __init__(self, input_images, class_of_interest, model, preprocess_func, max_features=10, k_pca=30, layers_to_analyze=None):
-        self.model = model
-        self.preprocess_func=preprocess_func
-        self.max_features = max_features
-        self.k_pca = k_pca
-        self.layers_to_analyze = layers_to_analyze
-
-        self.input_images = input_images
-        self.class_of_interest = class_of_interest
-        self.local_explanation_models = {}
-        self.global_explanation = []
-
-    def fit_explanation(self, verbose=False):
-        for idx, im in enumerate(self.input_images):
-            local_expl_model = LocalExplanationModel(im, self.class_of_interest, self.model, self.preprocess_func,
-                                                     max_features=self.max_features, k_pca=self.k_pca,
-                                                     layers_to_analyze=self.layers_to_analyze)
-
-            local_expl_model = local_expl_model.fit_explanation()
-            self.local_explanation_models[idx] = local_expl_model.best_explanation
-
-        for im_idx, l_expl in self.local_explanation_models.items():
-            for f_idx in l_expl.feature_ids:
-                f_im = l_expl.get_interpretable_feature(f_idx)
-                f_score = l_expl.get_numerical_explanation().loc[f_idx, [PerturbationScores.col_nPIR, PerturbationScores.col_nPIRP]].to_dict()
-                self.global_explanation.append({"image_id": im_idx, "feature_id": f_idx, "feature_img": f_im, "feature_scores": f_score})
-
-        return self
-
-    @staticmethod
-    def _imscatter(x, y, image, ax=None, zoom=1):
-        if ax is None:
-            ax = plt.gca()
-
-        im = OffsetImage(image, zoom=zoom)
-        x, y = np.atleast_1d(x, y)
-        artists = []
-        for x0, y0 in zip(x, y):
-            ab = AnnotationBbox(im, (x0, y0), xycoords='data', frameon=True)
-            artists.append(ax.add_artist(ab))
-            ax.scatter(x0, y0)
-        ax.update_datalim(np.column_stack([x, y]))
-        ax.autoscale()
-        return artists
-
-    def show_global_explanation(self):
-        if self.global_explanation.__len__() == 0:
-            raise Exception("Fit explanation first.")
-
-        t_size = (80, 80)
-
-        f_p_report = self.global_explanation.copy()
-        f_p_report = sorted(f_p_report, key=lambda x: np.abs(x["feature_scores"][PerturbationScores.col_nPIR]))
-
-        # KDE plot
-        lm = sns.jointplot([fp["feature_scores"][PerturbationScores.col_nPIR] for fp in f_p_report],
-                           [fp["feature_scores"][PerturbationScores.col_nPIRP] for fp in f_p_report],
-                           kind="kde", height=8)
-        ax = lm.ax_joint
-        ax.clear()
-
-        # Image plot
-        for g_expl in f_p_report:
-            f_im = g_expl["feature_img"]
-            f_score = g_expl["feature_scores"]
-
-            t_im = f_im.copy()
-            t_im = t_im.resize(t_size, Image.ANTIALIAS)
-            t_im = np.array(t_im)
-
-            self._imscatter(f_score[PerturbationScores.col_nPIR], f_score[PerturbationScores.col_nPIRP], t_im, ax=ax, zoom=1)
-
-        ax.set_ylim(-1.25, 1.25)
-        ax.set_xlim(-1.15, 1.15)
-        ax.set_xlabel("nPIR")
-        ax.set_ylabel("nPIRP")
-        lm.ax_marg_x.set_title("Class of interest:" + str(self.class_of_interest))
-
-        ax.axvline(0.0, 0.0, c='black')
-        ax.axhline(0.0, 0.0, c='black')
-
-        # Create a Rectangle patch
-        rect1 = Rectangle((-1.15, -1.25), 0.15, 2.5, linewidth=0, edgecolor='r', facecolor='gray', alpha=0.5)
-        rect2 = Rectangle((1.0, -1.25), 0.15, 2.5, linewidth=0, edgecolor='r', facecolor='gray', alpha=0.5)
-
-        rect3 = Rectangle((-1.0, 1.0), 2.0, 0.25, linewidth=0, facecolor='gray', alpha=0.5)
-        rect4 = Rectangle((-1.0, -1.25), 2.0, 0.25, linewidth=0, facecolor='gray', alpha=0.5)
-
-        # Add the patch to the Axes
-        ax.add_patch(rect1)
-        ax.add_patch(rect2)
-        ax.add_patch(rect3)
-        ax.add_patch(rect4)
-
-        ax.grid(True)
-
-        return ax, lm
+# class ClassGlobalExplanationModel:
+#
+#     def __init__(self, input_images, class_of_interest, model, preprocess_func, max_features=10, k_pca=30, layers_to_analyze=None):
+#         self.model = model
+#         self.preprocess_func=preprocess_func
+#         self.max_features = max_features
+#         self.k_pca = k_pca
+#         self.layers_to_analyze = layers_to_analyze
+#
+#         self.input_images = input_images
+#         self.class_of_interest = class_of_interest
+#         self.local_explanation_models = {}
+#         self.global_explanation = []
+#
+#     def fit_explanation(self, verbose=False):
+#         for idx, im in enumerate(self.input_images):
+#             local_expl_model = LocalExplanationModel(im, self.class_of_interest, self.model, self.preprocess_func,
+#                                                      max_features=self.max_features, k_pca=self.k_pca,
+#                                                      layers_to_analyze=self.layers_to_analyze)
+#
+#             local_expl_model = local_expl_model.fit_explanation()
+#             self.local_explanation_models[idx] = local_expl_model.best_explanation
+#
+#         for im_idx, l_expl in self.local_explanation_models.items():
+#             for f_idx in l_expl.feature_ids:
+#                 f_im = l_expl.get_interpretable_feature(f_idx)
+#                 f_score = l_expl.get_numerical_explanation().loc[f_idx, [PerturbationScores.col_nPIR, PerturbationScores.col_nPIRP]].to_dict()
+#                 self.global_explanation.append({"image_id": im_idx, "feature_id": f_idx, "feature_img": f_im, "feature_scores": f_score})
+#
+#         return self
+#
+#     @staticmethod
+#     def _imscatter(x, y, image, ax=None, zoom=1):
+#         if ax is None:
+#             ax = plt.gca()
+#
+#         im = OffsetImage(image, zoom=zoom)
+#         x, y = np.atleast_1d(x, y)
+#         artists = []
+#         for x0, y0 in zip(x, y):
+#             ab = AnnotationBbox(im, (x0, y0), xycoords='data', frameon=True)
+#             artists.append(ax.add_artist(ab))
+#             ax.scatter(x0, y0)
+#         ax.update_datalim(np.column_stack([x, y]))
+#         ax.autoscale()
+#         return artists
+#
+#     def show_global_explanation(self):
+#         if self.global_explanation.__len__() == 0:
+#             raise Exception("Fit explanation first.")
+#
+#         t_size = (80, 80)
+#
+#         f_p_report = self.global_explanation.copy()
+#         f_p_report = sorted(f_p_report, key=lambda x: np.abs(x["feature_scores"][PerturbationScores.col_nPIR]))
+#
+#         # KDE plot
+#         lm = sns.jointplot([fp["feature_scores"][PerturbationScores.col_nPIR] for fp in f_p_report],
+#                            [fp["feature_scores"][PerturbationScores.col_nPIRP] for fp in f_p_report],
+#                            kind="kde", height=8)
+#         ax = lm.ax_joint
+#         ax.clear()
+#
+#         # Image plot
+#         for g_expl in f_p_report:
+#             f_im = g_expl["feature_img"]
+#             f_score = g_expl["feature_scores"]
+#
+#             t_im = f_im.copy()
+#             t_im = t_im.resize(t_size, Image.ANTIALIAS)
+#             t_im = np.array(t_im)
+#
+#             self._imscatter(f_score[PerturbationScores.col_nPIR], f_score[PerturbationScores.col_nPIRP], t_im, ax=ax, zoom=1)
+#
+#         ax.set_ylim(-1.25, 1.25)
+#         ax.set_xlim(-1.15, 1.15)
+#         ax.set_xlabel("nPIR")
+#         ax.set_ylabel("nPIRP")
+#         lm.ax_marg_x.set_title("Class of interest:" + str(self.class_of_interest))
+#
+#         ax.axvline(0.0, 0.0, c='black')
+#         ax.axhline(0.0, 0.0, c='black')
+#
+#         # Create a Rectangle patch
+#         rect1 = Rectangle((-1.15, -1.25), 0.15, 2.5, linewidth=0, edgecolor='r', facecolor='gray', alpha=0.5)
+#         rect2 = Rectangle((1.0, -1.25), 0.15, 2.5, linewidth=0, edgecolor='r', facecolor='gray', alpha=0.5)
+#
+#         rect3 = Rectangle((-1.0, 1.0), 2.0, 0.25, linewidth=0, facecolor='gray', alpha=0.5)
+#         rect4 = Rectangle((-1.0, -1.25), 2.0, 0.25, linewidth=0, facecolor='gray', alpha=0.5)
+#
+#         # Add the patch to the Axes
+#         ax.add_patch(rect1)
+#         ax.add_patch(rect2)
+#         ax.add_patch(rect3)
+#         ax.add_patch(rect4)
+#
+#         ax.grid(True)
+#
+#         return ax, lm
