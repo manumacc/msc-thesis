@@ -6,10 +6,16 @@ name = "pypi"
 [packages]
 numpy = "*"
 pandas = "*"
+matplotlib = "*"
 scikit-learn = "*"
 modal = "*"
+seaborn = "*"
+tensorflow-datasets = "*"
+tensorflow = "==2.4.2"
+pillow = "!=8.3.0"
 
 [dev-packages]
+notebook = "*"
 
 [requires]
-python_version = "3.9"
+python_version = "3.8"
