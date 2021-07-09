@@ -1,63 +1,15 @@
 import gc
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageFilter
 from sklearn.cluster import KMeans, MiniBatchKMeans
 from sklearn.decomposition import TruncatedSVD, PCA
 from sklearn.preprocessing import normalize
 from tensorflow.keras.layers import Conv2D
 import tensorflow.keras.backend as K
-from scipy import sparse
+# from scipy import sparse
 
-# Profiling
 from time import perf_counter
-
-class ExplanationBatch:
-    def __init__(self,
-                 model,
-                 input_shape):
-        self.model = model
-        self.input_shape = input_shape
-
-    def save_perturbed(self):
-        pass
-
-    def generate_masks(self, X, feature_maps, min_features=2):
-        # Each image (first dim of X) has 2 masks (perturbed images) for k=2,
-        # 3 masks for k=3, ..., 5 masks for k=5. So in total, (2+3+4+5 masks).
-        # This can be generalized to any k.
-        # Masks are stored in a contiguous manner inside X_masks.
-        # Example of content of X_masks_map and X_masks_labels (if k is between 2 and 5):
-        #    X_masks_map    = [0,0,1,1,1,2,2,2,2,3,3,3,3,3]
-        #    X_masks_labels = [1,2,1,2,3,1,2,3,4,1,2,3,4,5]
-        # with len(X_masks_map) == len(X_masks_labels) == n_masks
-        n_masks = 0
-        X_masks_map = []
-        X_masks_labels = []
-        for i in range(feature_maps.shape[1]):
-            n_masks += min_features + i
-            X_masks_map.extend([min_features + i] * (min_features + i))
-            X_masks_labels.extend([x for x in range(1, min_features + i + 1)])
-
-        X_masks = np.empty((len(X), n_masks, *self.input_shape), dtype=bool)  # (batch_size, total num of masks, x, y)
-
-        # True: pixel to perturb, False: pixel to keep unchanged
-        for i in range(X_masks.shape[0]):  # Iterate over images
-            for mask_i in range(X_masks.shape[1]):  # Iterate over masks
-                X_masks[i, mask_i] = (feature_maps[i, X_masks_map[i]] == X_masks_labels[i])
-
-        return X_masks, X_masks_map, X_masks_labels
-
-    def fit(self, X, feature_maps):
-        """
-        X (batch_size, x, y) preprocessed batch of images
-        feature_maps (batch_size, n_features, x, y) assigns cluster
-            id, i.e., interpretable feature, to each pixel
-        """
-
-        # 1. create masks for images
-
-        pass
 
 
 class Explainer:
@@ -94,6 +46,34 @@ class Explainer:
                 layer_indexes.append(i)
             i = i + 1
         return layer_indexes
+
+    @staticmethod
+    def _pil_to_numpy(image):
+        """Convert a PIL Image instance to a numpy array"""
+
+        x = np.asarray(image, dtype='float32')
+
+        if len(x.shape) == 2:
+            x = x.reshape((x.shape[0], x.shape[1], 1))
+        elif len(x.shape) != 3:
+            raise ValueError(f"Unsupported image shape: {(x.shape,)}")
+
+        return x
+
+    def preprocess_images(self, images):
+        X = np.empty(shape=(len(images), *self.input_shape), dtype='float32')
+
+        for i, img in enumerate(images):
+            x = self._pil_to_numpy(img)
+
+            if x.shape != self.input_shape:
+                raise ValueError(f"Image must be of shape {self.input_shape}, instead received {x.shape}")
+
+            X[i] = x
+
+        X = self.preprocess_input_fn(X)
+
+        return X
 
     def extract_hypercolumns(self, X, n_components=30):
         # Extract feature maps. Return a list of length == len(self.layers),
@@ -166,9 +146,9 @@ class Explainer:
         # for each possible number of clusters. The best clustering will be
         # computed *later*, for now we need to save all possible maps.
         feature_maps = np.empty(
-            (hypercolumns.shape[0], max_features-min_features+1, self.input_shape[0], self.input_shape[1]),
+            (hypercolumns.shape[0], max_features-min_features+1, *self.input_shape[0:2]),
             dtype=np.uint8
-        )  # (batch_size, max_features-min_features+1, n_pixels_x, n_pixels_y)
+        )  # (batch_size, max_features-min_features+1, x, y)
 
         for i in range(len(hypercolumns)):  # iterate over batch
             start = perf_counter()
@@ -180,7 +160,7 @@ class Explainer:
                 print(f"computing explanation for {n_features} n_features")
                 model = KMeans(n_clusters=n_features, max_iter=MAX_ITER, random_state=RANDOM_STATE)
                 feature_map = model.fit_predict(hc_n)
-                feature_maps[i, n_features-min_features] = feature_map.reshape(self.input_shape[0], self.input_shape[1]).astype(np.uint8)
+                feature_maps[i, n_features-min_features] = feature_map.reshape(*self.input_shape[0:2]).astype(np.uint8)
 
             end = perf_counter()
             print(f"-- clustering {i} elapsed:", end - start)
@@ -189,28 +169,60 @@ class Explainer:
 
         return feature_maps
 
-    def preprocess_images(self, images):
-        # preallocate
-        X = np.empty(shape=(len(images), *self.input_shape), dtype='float32')
+    def generate_masks(self, X, feature_maps, min_features=2):
+        # Each image (first dim of X) has 2 masks (perturbed images) for k=2,
+        # 3 masks for k=3, ..., 5 masks for k=5. So in total, (2+3+4+5 masks).
+        # This can be generalized to any k.
+        # Masks are stored in a contiguous manner inside X_masks.
+        # Example of content of X_masks_map and X_masks_labels (if k is between 2 and 5):
+        #    X_masks_map    = [0,0,1,1,1,2,2,2,2,3,3,3,3,3]
+        #    X_masks_labels = [1,2,1,2,3,1,2,3,4,1,2,3,4,5]
+        # with len(X_masks_map) == len(X_masks_labels) == n_masks
+        start = perf_counter()
 
-        for i, img in enumerate(images):
-            # converts a PIL Image instance to a numpy array
-            x = np.asarray(img, dtype='float32')
+        n_masks = 0
+        X_masks_map = []
+        X_masks_labels = []
+        for i in range(feature_maps.shape[1]):
+            n_masks += min_features + i
+            X_masks_map.extend([i] * (min_features + i))
+            X_masks_labels.extend([x for x in range(1, min_features + i + 1)])
 
-            if len(x.shape) == 2:
-                x = x.reshape((x.shape[0], x.shape[1], 1))
-            elif len(x.shape) != 3:
-                raise ValueError(f"Unsupported image shape: {(x.shape,)}")
+        X_masks = np.empty((len(X), n_masks, *self.input_shape[0:2]), dtype=np.uint8)  # (batch_size, total num of masks, x, y)
 
-            # sanity check
-            if x.shape != self.input_shape:
-                raise ValueError(f"Image must be of shape {self.input_shape}, instead received {x.shape}")
+        # True: pixel to perturb, False: pixel to keep unchanged
+        for i in range(X_masks.shape[0]):  # Iterate over images
+            for mask_i in range(X_masks.shape[1]):  # Iterate over masks
+                X_masks[i, mask_i] = (feature_maps[i, X_masks_map[mask_i]] == X_masks_labels[mask_i]) * 255
 
-            X[i] = x
+        end = perf_counter()
+        print(f"- generate all masks:", end - start)
 
-        X = self.preprocess_input_fn(X)
+        return X_masks, X_masks_map, X_masks_labels
 
-        return X
+    def perturb(self, images, X_masks):
+        # TODO: Check alternatives (e.g., BoxBlur runs in linear time!)
+        #   https://pillow.readthedocs.io/en/stable/reference/ImageFilter.html#module-PIL.ImageFilter
+        perturb_filter = ImageFilter.GaussianBlur(radius=10)
+
+        start = perf_counter()
+        images_perturbed = [[] for _ in range(len(images))]
+        for i in range(len(images)):
+            im_full_perturbed = images[i].filter(perturb_filter)
+
+            for mask_i in range(X_masks.shape[1]):
+                im_perturbed = images[i].copy()
+
+                # Create and apply mask
+                im_mask = Image.fromarray(X_masks[i, mask_i], mode="L")
+                im_perturbed.paste(im_full_perturbed, mask=im_mask)
+
+                images_perturbed[i].append(im_perturbed)
+
+        end = perf_counter()
+        print(f"- blur images:", end - start)
+
+        return images_perturbed
 
     def fit_batch(self, images, cois):
         """Fit explainer to batch of images.
@@ -222,12 +234,16 @@ class Explainer:
         X = self.preprocess_images(images)
         hypercolumns = self.extract_hypercolumns(X)
         feature_maps = self.kmeans_cluster_hypercolumns(hypercolumns)
+        X_masks, X_masks_map, X_masks_labels = self.generate_masks(X, feature_maps)
+        images_perturbed = self.perturb(images, X_masks)
 
-        print(feature_maps.shape)
-        print(feature_maps[0])
+        # ... = self.explain_numeric()
+        # ... = self.explain_visual()
 
-        raise RuntimeError("STOP")
+        # debug. gc to remove
+        del X, hypercolumns, feature_maps, X_masks, images_perturbed
+        gc.collect()
 
-        best_explanations = []
-        for i in range(len(hc)):
-            pass
+        return None
+
+        # raise RuntimeError("STOP")
