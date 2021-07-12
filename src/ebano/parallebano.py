@@ -1,4 +1,5 @@
 import gc
+import sys
 
 import numpy as np
 from PIL import Image, ImageFilter
@@ -15,12 +16,18 @@ from time import perf_counter
 class Explainer:
     def __init__(self,
                  model,
+                 n_classes,
                  preprocess_input_fn,
                  input_shape,
                  layers_to_analyze=None):
         self.model = model  # e.g. vgg16 instance
+        self.n_classes = n_classes  # TODO: change this to dynamically allocate the n of classes depending on model
         self.preprocess_input_fn = preprocess_input_fn  # e.g. vgg16.preprocess_input
         self.input_shape = input_shape
+
+        # TODO: Check alternatives (e.g., BoxBlur runs in linear time!)
+        #   https://pillow.readthedocs.io/en/stable/reference/ImageFilter.html#module-PIL.ImageFilter
+        self.perturb_filter = ImageFilter.GaussianBlur(radius=10)
 
         layer_indexes = self._get_conv_layer_indexes(self.model)
         if layers_to_analyze:
@@ -31,10 +38,6 @@ class Explainer:
 
         layer_indexes = layer_indexes[-layers_to_analyze:]
         self.layers = [self.model.layers[li].output for li in layer_indexes]
-
-        # Explanation
-        self.local_explanations = []
-        self.best_explanation = []
 
     @staticmethod
     def _get_conv_layer_indexes(model):
@@ -190,7 +193,7 @@ class Explainer:
 
         X_masks = np.empty((len(X), n_masks, *self.input_shape[0:2]), dtype=np.uint8)  # (batch_size, total num of masks, x, y)
 
-        # True: pixel to perturb, False: pixel to keep unchanged
+        # 255: pixel to perturb, 0: pixel to keep unchanged
         for i in range(X_masks.shape[0]):  # Iterate over images
             for mask_i in range(X_masks.shape[1]):  # Iterate over masks
                 X_masks[i, mask_i] = (feature_maps[i, X_masks_map[mask_i]] == X_masks_labels[mask_i]) * 255
@@ -201,14 +204,38 @@ class Explainer:
         return X_masks, X_masks_map, X_masks_labels
 
     def perturb(self, images, X_masks):
-        # TODO: Check alternatives (e.g., BoxBlur runs in linear time!)
-        #   https://pillow.readthedocs.io/en/stable/reference/ImageFilter.html#module-PIL.ImageFilter
-        perturb_filter = ImageFilter.GaussianBlur(radius=10)
+        start = perf_counter()
+        images_perturbed = []
 
+        # i-th elem indicates the index of the original image inside the array
+        # `images` corresponding images_perturbed[i]
+        images_perturbed_origin_map = np.empty((len(images) * X_masks.shape[1]))
+
+        for i in range(len(images)):
+            im_full_perturbed = images[i].filter(self.perturb_filter)
+
+            for mask_i in range(X_masks.shape[1]):
+                im_perturbed = images[i].copy()
+
+                # Create and apply mask
+                im_mask = Image.fromarray(X_masks[i, mask_i], mode="L")
+                im_perturbed.paste(im_full_perturbed, mask=im_mask)
+
+                images_perturbed.append(im_perturbed)
+
+                images_perturbed_origin_map[i*X_masks.shape[1]+mask_i] = i
+
+        end = perf_counter()
+        print(f"- blur images:", end - start)
+
+        return images_perturbed, images_perturbed_origin_map
+
+    def perturb_format_sublists(self, images, X_masks):
         start = perf_counter()
         images_perturbed = [[] for _ in range(len(images))]
+
         for i in range(len(images)):
-            im_full_perturbed = images[i].filter(perturb_filter)
+            im_full_perturbed = images[i].filter(self.perturb_filter)
 
             for mask_i in range(X_masks.shape[1]):
                 im_perturbed = images[i].copy()
@@ -224,6 +251,50 @@ class Explainer:
 
         return images_perturbed
 
+    @staticmethod
+    def softsign(x):
+        return x / (1 + abs(x))
+
+    @staticmethod
+    def relu(x):
+        if x < 0:
+            return 0.
+        return x
+
+    def explain_numeric(self, preds_perturbed, preds_original, cois):
+        """
+        preds_perturbed (batch size, num masks per image, n_classes)
+        preds_original (batch size, n_classes)
+        cois (batch size)
+        """
+
+        # Normalized Perturbation Influence Relation (nPIR) for all classes
+        # Normalizer Perturbation Influence Relation Precision (nPIRP)
+
+        # One set of scores per perturbed image (batch size * num masks per image scores)
+        nPIR = np.empty((*preds_perturbed.shape[0:2], ), dtype=float)
+        nPIRP = None
+
+        for i in range(preds_perturbed.shape[0]):  # Iterate over batch
+            ci = cois[i]  # class of interest
+            p_o_ci = preds_original[i, ci]
+
+            for f_i in range(preds_perturbed.shape[1]):  # Iterate over masks (interpretable features)
+                nPIR_f = np.empty((self.n_classes, ))  # vector with nPIR_f computed for each possible class
+
+                for c in range(self.n_classes):
+                    p_o_c = preds_original[i, c]
+                    p_f_c = preds_perturbed[i, f_i, c]  # prob of image to be labeled as ci when f_i is perturbed
+                    alpha = min([(1 - p_o_c / p_f_c), sys.float_info.max])
+                    beta = min([(1 - p_f_c / p_o_c), sys.float_info.max])
+                    PIR_f_c = p_f_c * beta - p_o_c * alpha
+                    nPIR_f_c = self.softsign(PIR_f_c)
+                    nPIR_f[c] = nPIR_f_c
+
+                nPIR[i, f_i] = nPIR_f[ci]  # get the nPIR for the class of interest
+
+        return nPIR, nPIRP
+
     def fit_batch(self, images, cois):
         """Fit explainer to batch of images.
 
@@ -235,13 +306,35 @@ class Explainer:
         hypercolumns = self.extract_hypercolumns(X)
         feature_maps = self.kmeans_cluster_hypercolumns(hypercolumns)
         X_masks, X_masks_map, X_masks_labels = self.generate_masks(X, feature_maps)
-        images_perturbed = self.perturb(images, X_masks)
+        images_perturbed, images_perturbed_origin_map = self.perturb(images, X_masks)
 
-        # ... = self.explain_numeric()
+        print(X_masks_map)
+        print(images_perturbed_origin_map)
+        print(images_perturbed)
+
+        start = perf_counter()
+        X_perturbed = self.preprocess_images(images_perturbed)
+        end = perf_counter()
+        print(f"- preprocess perturbed: ", end-start)
+
+        start = perf_counter()
+        preds_original = self.model.predict(X)
+        end = perf_counter()
+        print(f"- predict originals:", end-start)
+
+        start = perf_counter()
+        preds_perturbed = self.model.predict(X_perturbed)
+        preds_perturbed = preds_perturbed.reshape((len(images), len(X_masks_map), -1))
+        end = perf_counter()
+        print(f"- predict perturbed: {end-start}")
+
+        print(X_perturbed.shape, preds_original.shape, preds_perturbed.shape)
+
+        nPIR, nPIRP = self.explain_numeric(preds_perturbed, preds_original, cois)
         # ... = self.explain_visual()
 
         # debug. gc to remove
-        del X, hypercolumns, feature_maps, X_masks, images_perturbed
+        del X, hypercolumns, feature_maps, X_masks, images_perturbed, X_perturbed, preds_original, preds_perturbed
         gc.collect()
 
         return None
