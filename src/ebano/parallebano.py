@@ -9,6 +9,8 @@ from sklearn.preprocessing import normalize
 from tensorflow.keras.layers import Conv2D
 import tensorflow.keras.backend as K
 # from scipy import sparse
+import matplotlib as mpl
+import matplotlib.pyplot as plt
 
 from time import perf_counter
 
@@ -261,23 +263,28 @@ class Explainer:
             return 0.
         return x
 
+    @staticmethod
+    def inf_float(x):
+        if x == np.inf:
+            return sys.float_info.max
+        elif x == -np.inf:
+            return -sys.float_info.max
+        return x
+
     def explain_numeric(self, preds_perturbed, preds_original, cois):
         """
         preds_perturbed (batch size, num masks per image, n_classes)
         preds_original (batch size, n_classes)
         cois (batch size)
         """
-
-        # Normalized Perturbation Influence Relation (nPIR) for all classes
-        # Normalizer Perturbation Influence Relation Precision (nPIRP)
+        start = perf_counter()
 
         # One set of scores per perturbed image (batch size * num masks per image scores)
         nPIR = np.empty((*preds_perturbed.shape[0:2], ), dtype=float)
-        nPIRP = None
+        nPIRP = np.empty((*preds_perturbed.shape[0:2], ), dtype=float)
 
         for i in range(preds_perturbed.shape[0]):  # Iterate over batch
             ci = cois[i]  # class of interest
-            p_o_ci = preds_original[i, ci]
 
             for f_i in range(preds_perturbed.shape[1]):  # Iterate over masks (interpretable features)
                 nPIR_f = np.empty((self.n_classes, ))  # vector with nPIR_f computed for each possible class
@@ -285,22 +292,70 @@ class Explainer:
                 for c in range(self.n_classes):
                     p_o_c = preds_original[i, c]
                     p_f_c = preds_perturbed[i, f_i, c]  # prob of image to be labeled as ci when f_i is perturbed
-                    alpha = min([(1 - p_o_c / p_f_c), sys.float_info.max])
-                    beta = min([(1 - p_f_c / p_o_c), sys.float_info.max])
+                    alpha = self.inf_float((1 - p_o_c / p_f_c))
+                    beta = self.inf_float((1 - p_f_c / p_o_c))
                     PIR_f_c = p_f_c * beta - p_o_c * alpha
                     nPIR_f_c = self.softsign(PIR_f_c)
                     nPIR_f[c] = nPIR_f_c
 
                 nPIR[i, f_i] = nPIR_f[ci]  # get the nPIR for the class of interest
 
+                # Compute nPIRP
+                xi_vector = preds_original[i] * np.absolute(nPIR_f)
+                xi_vector_no_ci = np.delete(xi_vector, ci)
+                xi_ci = xi_vector[ci]
+                xi_no_ci = np.sum(xi_vector_no_ci)
+                a = self.inf_float((1 - xi_ci / xi_no_ci))
+                b = self.inf_float((1 - xi_no_ci / xi_ci))
+                PIRP_f_ci = xi_no_ci * b - xi_ci * a
+                nPIRP_f_ci = self.softsign(PIRP_f_ci)
+
+                nPIRP[i, f_i] = nPIRP_f_ci
+
+        end = perf_counter()
+        print(f"- numeric explanation: {end - start}")
+
+        # TODO: compute informativeness
+
         return nPIR, nPIRP
 
-    def fit_batch(self, images, cois):
+    @staticmethod
+    def explain_visual_old(image, X_masks, nPIR, nPIRP, cmap='RdYlGn'):
+        nPIR_heatmap = np.sum(X_masks.astype(np.bool) * nPIR.reshape(-1, 1, 1), axis=0)
+        nPIRP_heatmap = np.sum(X_masks.astype(np.bool) * nPIRP.reshape(-1, 1, 1), axis=0)
+
+        norm = mpl.colors.Normalize(vmin=-1.0, vmax=1.0)
+        colors = plt.cm.ScalarMappable(norm=norm, cmap=plt.get_cmap(cmap)).to_rgba(nPIR_heatmap)
+        mask = Image.fromarray((colors * 255).astype(np.uint8), mode="RGBA")
+        blended = Image.blend(image.copy().convert("RGBA"), mask, alpha=.85)
+
+        fig, ax = plt.subplots(figsize=(5, 5))
+        fig.tight_layout()
+        ax.imshow(blended)
+        ax.grid(False)
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+        cb_ax = fig.add_axes([1, 0.12, 0.05, 0.8])
+        cb = mpl.colorbar.ColorbarBase(
+            cb_ax,
+            cmap=plt.get_cmap(cmap),
+            norm=mpl.colors.Normalize(vmin=-1, vmax=1),
+            orientation='vertical'
+        )
+        cb.set_label("nPIR")
+
+        plt.show()
+
+    def fit_batch(self, images, cois, min_features=2, max_features=5):
         """Fit explainer to batch of images.
 
         images (list of PIL images) of length n
         cois: np array of shape (n,)
         """
+
+        MIN_FEATURES = 2
+        MAX_FEATURES = 5
 
         X = self.preprocess_images(images)
         hypercolumns = self.extract_hypercolumns(X)
@@ -328,15 +383,19 @@ class Explainer:
         end = perf_counter()
         print(f"- predict perturbed: {end-start}")
 
-        print(X_perturbed.shape, preds_original.shape, preds_perturbed.shape)
-
         nPIR, nPIRP = self.explain_numeric(preds_perturbed, preds_original, cois)
-        # ... = self.explain_visual()
+
+        for i in range(len(images)):
+            print(f"# image {i}")
+            for k_i in np.unique(X_masks_map):
+                print(f"* k={k_i+MIN_FEATURES}")
+                mask = X_masks_map == k_i
+                print(nPIR[i][mask])
+                self.explain_visual_old(images[i], X_masks[i][mask], nPIR[i][mask], nPIRP[i][mask])
+
+                # if k_i == 1:
+                #     return images[i], X_masks[i][mask], nPIR[i][mask], nPIRP[i][mask]
 
         # debug. gc to remove
         del X, hypercolumns, feature_maps, X_masks, images_perturbed, X_perturbed, preds_original, preds_perturbed
         gc.collect()
-
-        return None
-
-        # raise RuntimeError("STOP")
