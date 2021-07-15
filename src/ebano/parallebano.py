@@ -108,7 +108,6 @@ class Explainer:
             for ii, fm_img in enumerate(fm_reshaped):  # fm_img.shape = (n_filters, y, x)
                 fi = 0
                 for fmp in fm_img:  # fmp.shape = (y, x)
-                    # TODO: if too slow, maybe try https://docs.opencv.org/2.4/modules/imgproc/doc/geometric_transformations.html#cv2.resize
                     upscaled = np.array(Image.fromarray(fmp).resize(image_size, Image.BILINEAR))  # (image_size[0], image_size[1])
                     hc[ii, fi] = upscaled
                     fi += 1
@@ -121,11 +120,26 @@ class Explainer:
         # Dimensionality reduction of feature maps
         # TODO: use TruncatedSVD with sparse matrices instead of PCA -- possible speedup
         #  see: https://stats.stackexchange.com/questions/199501/user-segmentation-by-clustering-with-sparse-data
-        hc_pca = np.empty((batch_size, hc.shape[1], n_components), dtype='float32')
-        pca = PCA(n_components=n_components, copy=False)
-        for i in range(batch_size):
-            print(f"performing PCA {i}")
-            hc_pca[i] = pca.fit_transform(hc[i])  # fit_transform accepts (n_samples=n_pixels, n_components)
+        PCA_TYPE = "fit-first"  # "batch", "fit-first", None
+        if PCA_TYPE == "fit-first":
+            hc_pca = np.empty((batch_size, hc.shape[1], n_components), dtype='float32')
+            pca = PCA(n_components=n_components, copy=False)
+            print(f"fitting PCA")
+            hc_pca[0] = pca.fit_transform(hc[0])
+            for i in range(1, batch_size):
+                print(f"performing PCA {i}")
+                hc_pca[i] = pca.transform(hc[i])
+        elif PCA_TYPE == "batch":
+            hc_pca = np.empty((batch_size * hc.shape[1], n_components), dtype='float32')
+            pca = PCA(n_components=n_components, copy=False)
+            hc_pca = pca.fit_transform(hc.reshape((-1, n_features_hc)))
+            hc_pca = hc_pca.reshape((batch_size, hc.shape[1], n_components))
+        else:
+            hc_pca = np.empty((batch_size, hc.shape[1], n_components), dtype='float32')
+            pca = PCA(n_components=n_components, copy=False)
+            for i in range(batch_size):
+                print(f"performing PCA {i}")
+                hc_pca[i] = pca.fit_transform(hc[i])  # fit_transform accepts (n_samples=n_pixels, n_components)
 
         ### TRUNCATEDSVD ###
         # hc_svd = np.empty((batch_size, hc.shape[1], n_components), dtype='float32')
@@ -385,13 +399,13 @@ class Explainer:
 
         nPIR, nPIRP = self.explain_numeric(preds_perturbed, preds_original, cois)
 
-        for i in range(len(images)):
-            print(f"# image {i}")
-            for k_i in np.unique(X_masks_map):
-                print(f"* k={k_i+MIN_FEATURES}")
-                mask = X_masks_map == k_i
-                print(nPIR[i][mask])
-                self.explain_visual_old(images[i], X_masks[i][mask], nPIR[i][mask], nPIRP[i][mask])
+        # for i in range(len(images)):
+        #     print(f"# image {i}")
+        #     for k_i in np.unique(X_masks_map):
+        #         print(f"* k={k_i+MIN_FEATURES}")
+        #         mask = X_masks_map == k_i
+        #         print(nPIR[i][mask])
+        #         self.explain_visual_old(images[i], X_masks[i][mask], nPIR[i][mask], nPIRP[i][mask])
 
                 # if k_i == 1:
                 #     return images[i], X_masks[i][mask], nPIR[i][mask], nPIRP[i][mask]
