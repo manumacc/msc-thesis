@@ -12,7 +12,7 @@ import tensorflow.keras.backend as K
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 
-from time import perf_counter
+from utils import Profiling
 
 
 class Explainer:
@@ -91,69 +91,64 @@ class Explainer:
         #     print("Shape", fm.shape)
         #     print(f"Sparsity measure (n zeros/total): {(fm == 0).sum()}/{fm.size}={(fm == 0).sum()/fm.size}")
 
-        start = perf_counter()
-        # Preallocate hypercolumn array
-        batch_size = feature_maps[0].shape[0]
-        image_size = self.input_shape[0:2]  # e.g. (224, 224)
-        n_features_hc = sum([fm.shape[-1] for fm in feature_maps])
-        hc = np.empty((batch_size, n_features_hc, *image_size), dtype='float32')
+        with Profiling("extract hypercolumns"):
+            # Preallocate hypercolumn array
+            batch_size = feature_maps[0].shape[0]
+            image_size = self.input_shape[0:2]  # e.g. (224, 224)
+            n_features_hc = sum([fm.shape[-1] for fm in feature_maps])
+            hc = np.empty((batch_size, n_features_hc, *image_size), dtype='float32')
 
-        # Extract hypercolumns
-        for fm in feature_maps:  # fm.shape = (batch_size, x, y, n_filters) e.g., (8, 14, 14, 512)
-            # TODO: you can remove transpose altogether and iterate over arbitrary dimension -- but you pay with mental sanity
-            #  see https://stackoverflow.com/questions/1589706/iterating-over-arbitrary-dimension-of-numpy-array
+            # Extract hypercolumns
+            for fm in feature_maps:  # fm.shape = (batch_size, x, y, n_filters) e.g., (8, 14, 14, 512)
+                # TODO: you can remove transpose altogether and iterate over arbitrary dimension -- but you pay with mental sanity
+                #  see https://stackoverflow.com/questions/1589706/iterating-over-arbitrary-dimension-of-numpy-array
 
-            fm_reshaped = fm.transpose((0, 3, 2, 1))
+                fm_reshaped = fm.transpose((0, 3, 1, 2))
 
-            for ii, fm_img in enumerate(fm_reshaped):  # fm_img.shape = (n_filters, y, x)
-                fi = 0
-                for fmp in fm_img:  # fmp.shape = (y, x)
-                    upscaled = np.array(Image.fromarray(fmp).resize(image_size, Image.BILINEAR))  # (image_size[0], image_size[1])
-                    hc[ii, fi] = upscaled
-                    fi += 1
+                for ii, fm_img in enumerate(fm_reshaped):  # fm_img.shape = (n_filters, x, y)
+                    fi = 0
+                    for fmp in fm_img:  # fmp.shape = (y, x)
+                        upscaled = np.array(Image.fromarray(fmp).resize(image_size, Image.BILINEAR))  # (image_size[0], image_size[1])
+                        hc[ii, fi] = upscaled
+                        fi += 1
 
-        hc = hc.reshape((batch_size, n_features_hc, np.prod(image_size))).transpose((0, 2, 1))  # (batch_size, 224*224 = 50176, n_features_hc)
-        end = perf_counter()
-        print("-- extract hypercols: ", end-start)
+            hc = hc.reshape((batch_size, n_features_hc, np.prod(image_size))).transpose((0, 2, 1))  # (batch_size, 224*224 = 50176, n_features_hc)
 
-        start = perf_counter()
-        # Dimensionality reduction of feature maps
-        # TODO: use TruncatedSVD with sparse matrices instead of PCA -- possible speedup
-        #  see: https://stats.stackexchange.com/questions/199501/user-segmentation-by-clustering-with-sparse-data
-        PCA_TYPE = "fit-first"  # "batch", "fit-first", None
-        if PCA_TYPE == "fit-first":
-            hc_pca = np.empty((batch_size, hc.shape[1], n_components), dtype='float32')
-            pca = PCA(n_components=n_components, copy=False)
-            print(f"fitting PCA")
-            hc_pca[0] = pca.fit_transform(hc[0])
-            for i in range(1, batch_size):
-                print(f"performing PCA {i}")
-                hc_pca[i] = pca.transform(hc[i])
-        elif PCA_TYPE == "batch":
-            hc_pca = np.empty((batch_size * hc.shape[1], n_components), dtype='float32')
-            pca = PCA(n_components=n_components, copy=False)
-            hc_pca = pca.fit_transform(hc.reshape((-1, n_features_hc)))
-            hc_pca = hc_pca.reshape((batch_size, hc.shape[1], n_components))
-        else:
-            hc_pca = np.empty((batch_size, hc.shape[1], n_components), dtype='float32')
-            pca = PCA(n_components=n_components, copy=False)
-            for i in range(batch_size):
-                print(f"performing PCA {i}")
-                hc_pca[i] = pca.fit_transform(hc[i])  # fit_transform accepts (n_samples=n_pixels, n_components)
+        with Profiling("dimensionality reduction"):
+            # Dimensionality reduction of feature maps
+            # TODO: use TruncatedSVD with sparse matrices instead of PCA -- possible speedup
+            #  see: https://stats.stackexchange.com/questions/199501/user-segmentation-by-clustering-with-sparse-data
+            PCA_TYPE = None  # "batch", "fit-first", None
+            if PCA_TYPE == "fit-first":
+                hc_pca = np.empty((batch_size, hc.shape[1], n_components), dtype='float32')
+                pca = PCA(n_components=n_components, copy=False)
+                print(f"fitting PCA")
+                hc_pca[0] = pca.fit_transform(hc[0])
+                for i in range(1, batch_size):
+                    print(f"performing PCA {i}")
+                    hc_pca[i] = pca.transform(hc[i])
+            elif PCA_TYPE == "batch":
+                # hc_pca = np.empty((batch_size * hc.shape[1], n_components), dtype='float32')
+                pca = PCA(n_components=n_components, copy=False)
+                hc_pca = pca.fit_transform(hc.reshape((-1, n_features_hc)))
+                hc_pca = hc_pca.reshape((batch_size, hc.shape[1], n_components))
+            else:
+                hc_pca = np.empty((batch_size, hc.shape[1], n_components), dtype='float32')
+                pca = PCA(n_components=n_components, copy=False)
+                for i in range(batch_size):
+                    print(f"performing PCA {i}")
+                    hc_pca[i] = pca.fit_transform(hc[i])  # fit_transform accepts (n_samples=n_pixels, n_components)
 
-        ### TRUNCATEDSVD ###
-        # hc_svd = np.empty((batch_size, hc.shape[1], n_components), dtype='float32')
-        # svd = TruncatedSVD(n_components=n_components)
-        # for i in range(batch_size):
-        #     print(f"performing SVD {i}")
-        #     hc_sparse = sparse.csr_matrix(hc[i])
-        #     hc_svd[i] = svd.fit_transform(hc_sparse).todense()???  # fit_transform accepts (n_samples=n_pixels, n_components)
+            ### TRUNCATEDSVD ###
+            # hc_svd = np.empty((batch_size, hc.shape[1], n_components), dtype='float32')
+            # svd = TruncatedSVD(n_components=n_components)
+            # for i in range(batch_size):
+            #     print(f"performing SVD {i}")
+            #     hc_sparse = sparse.csr_matrix(hc[i])
+            #     hc_svd[i] = svd.fit_transform(hc_sparse).todense()???  # fit_transform accepts (n_samples=n_pixels, n_components)
 
-        del hc
-        gc.collect()
-
-        end = perf_counter()
-        print("-- dimensionality reduction: ", end - start)
+            del hc
+            gc.collect()
 
         return hc_pca  # (batch_size, n_pixels, n_components)
 
@@ -170,19 +165,41 @@ class Explainer:
         )  # (batch_size, max_features-min_features+1, x, y)
 
         for i in range(len(hypercolumns)):  # iterate over batch
-            start = perf_counter()
+            with Profiling(f"clustering for image id {i}"):
+                hc_n = normalize(hypercolumns[i], norm='l2', axis=1)
 
-            print(f"clustering starting for image id {i}")
-            hc_n = normalize(hypercolumns[i], norm='l2', axis=1)
+                for n_features in range(min_features, max_features+1):
+                    print(f"computing explanation for {n_features} n_features")
+                    model = KMeans(n_clusters=n_features, max_iter=MAX_ITER, random_state=RANDOM_STATE)
+                    feature_map = model.fit_predict(hc_n)
+                    feature_maps[i, n_features-min_features] = feature_map.reshape(*self.input_shape[0:2]).astype(np.uint8)
 
-            for n_features in range(min_features, max_features+1):
-                print(f"computing explanation for {n_features} n_features")
-                model = KMeans(n_clusters=n_features, max_iter=MAX_ITER, random_state=RANDOM_STATE)
-                feature_map = model.fit_predict(hc_n)
-                feature_maps[i, n_features-min_features] = feature_map.reshape(*self.input_shape[0:2]).astype(np.uint8)
+        feature_maps += 1  # start labels from 1 instead of 0
 
-            end = perf_counter()
-            print(f"-- clustering {i} elapsed:", end - start)
+        return feature_maps
+
+    def minibatchkmeans_cluster_hypercolumns(self, hypercolumns, min_features=2, max_features=5):
+        RANDOM_STATE = 42
+        MAX_ITER = 300
+        BATCH_SIZE = 500
+
+        # Each image has (max_features-min_features+1) feature maps, i.e., one
+        # for each possible number of clusters. The best clustering will be
+        # computed *later*, for now we need to save all possible maps.
+        feature_maps = np.empty(
+            (hypercolumns.shape[0], max_features-min_features+1, *self.input_shape[0:2]),
+            dtype=np.uint8
+        )  # (batch_size, max_features-min_features+1, x, y)
+
+        for i in range(len(hypercolumns)):  # iterate over batch
+            with Profiling(f"clustering for image id {i}"):
+                hc_n = normalize(hypercolumns[i], norm='l2', axis=1)
+
+                for n_features in range(min_features, max_features+1):
+                    print(f"computing explanation for {n_features} n_features")
+                    model = MiniBatchKMeans(n_clusters=n_features, max_iter=MAX_ITER, batch_size=BATCH_SIZE, random_state=RANDOM_STATE)
+                    feature_map = model.fit_predict(hc_n)
+                    feature_maps[i, n_features-min_features] = feature_map.reshape(*self.input_shape[0:2]).astype(np.uint8)
 
         feature_maps += 1  # start labels from 1 instead of 0
 
@@ -197,75 +214,48 @@ class Explainer:
         #    X_masks_map    = [0,0,1,1,1,2,2,2,2,3,3,3,3,3]
         #    X_masks_labels = [1,2,1,2,3,1,2,3,4,1,2,3,4,5]
         # with len(X_masks_map) == len(X_masks_labels) == n_masks
-        start = perf_counter()
 
-        n_masks = 0
-        X_masks_map = []
-        X_masks_labels = []
-        for i in range(feature_maps.shape[1]):
-            n_masks += min_features + i
-            X_masks_map.extend([i] * (min_features + i))
-            X_masks_labels.extend([x for x in range(1, min_features + i + 1)])
+        with Profiling("generate masks"):
+            n_masks = 0
+            X_masks_map = []
+            X_masks_labels = []
+            for i in range(feature_maps.shape[1]):
+                n_masks += min_features + i
+                X_masks_map.extend([i] * (min_features + i))
+                X_masks_labels.extend([x for x in range(1, min_features + i + 1)])
 
-        X_masks = np.empty((len(X), n_masks, *self.input_shape[0:2]), dtype=np.uint8)  # (batch_size, total num of masks, x, y)
+            X_masks = np.empty((len(X), n_masks, *self.input_shape[0:2]), dtype=np.uint8)  # (batch_size, total num of masks, x, y)
 
-        # 255: pixel to perturb, 0: pixel to keep unchanged
-        for i in range(X_masks.shape[0]):  # Iterate over images
-            for mask_i in range(X_masks.shape[1]):  # Iterate over masks
-                X_masks[i, mask_i] = (feature_maps[i, X_masks_map[mask_i]] == X_masks_labels[mask_i]) * 255
-
-        end = perf_counter()
-        print(f"- generate all masks:", end - start)
+            # 255: pixel to perturb, 0: pixel to keep unchanged
+            for i in range(X_masks.shape[0]):  # Iterate over images
+                for mask_i in range(X_masks.shape[1]):  # Iterate over masks
+                    X_masks[i, mask_i] = (feature_maps[i, X_masks_map[mask_i]] == X_masks_labels[mask_i]) * 255
 
         return X_masks, X_masks_map, X_masks_labels
 
     def perturb(self, images, X_masks):
-        start = perf_counter()
-        images_perturbed = []
+        with Profiling("blur images"):
+            images_perturbed = []
 
-        # i-th elem indicates the index of the original image inside the array
-        # `images` corresponding images_perturbed[i]
-        images_perturbed_origin_map = np.empty((len(images) * X_masks.shape[1]))
+            # i-th elem indicates the index of the original image inside the array
+            # `images` corresponding images_perturbed[i]
+            images_perturbed_origin_map = np.empty((len(images) * X_masks.shape[1]))
 
-        for i in range(len(images)):
-            im_full_perturbed = images[i].filter(self.perturb_filter)
+            for i in range(len(images)):
+                im_full_perturbed = images[i].filter(self.perturb_filter)
 
-            for mask_i in range(X_masks.shape[1]):
-                im_perturbed = images[i].copy()
+                for mask_i in range(X_masks.shape[1]):
+                    im_perturbed = images[i].copy()
 
-                # Create and apply mask
-                im_mask = Image.fromarray(X_masks[i, mask_i], mode="L")
-                im_perturbed.paste(im_full_perturbed, mask=im_mask)
+                    # Create and apply mask
+                    im_mask = Image.fromarray(X_masks[i, mask_i], mode="L")
+                    im_perturbed.paste(im_full_perturbed, mask=im_mask)
 
-                images_perturbed.append(im_perturbed)
+                    images_perturbed.append(im_perturbed)
 
-                images_perturbed_origin_map[i*X_masks.shape[1]+mask_i] = i
-
-        end = perf_counter()
-        print(f"- blur images:", end - start)
+                    images_perturbed_origin_map[i*X_masks.shape[1]+mask_i] = i
 
         return images_perturbed, images_perturbed_origin_map
-
-    def perturb_format_sublists(self, images, X_masks):
-        start = perf_counter()
-        images_perturbed = [[] for _ in range(len(images))]
-
-        for i in range(len(images)):
-            im_full_perturbed = images[i].filter(self.perturb_filter)
-
-            for mask_i in range(X_masks.shape[1]):
-                im_perturbed = images[i].copy()
-
-                # Create and apply mask
-                im_mask = Image.fromarray(X_masks[i, mask_i], mode="L")
-                im_perturbed.paste(im_full_perturbed, mask=im_mask)
-
-                images_perturbed[i].append(im_perturbed)
-
-        end = perf_counter()
-        print(f"- blur images:", end - start)
-
-        return images_perturbed
 
     @staticmethod
     def softsign(x):
@@ -291,43 +281,39 @@ class Explainer:
         preds_original (batch size, n_classes)
         cois (batch size)
         """
-        start = perf_counter()
+        with Profiling("numeric explanation"):
+            # One set of scores per perturbed image (batch size * num masks per image scores)
+            nPIR = np.empty((*preds_perturbed.shape[0:2], ), dtype=float)
+            nPIRP = np.empty((*preds_perturbed.shape[0:2], ), dtype=float)
 
-        # One set of scores per perturbed image (batch size * num masks per image scores)
-        nPIR = np.empty((*preds_perturbed.shape[0:2], ), dtype=float)
-        nPIRP = np.empty((*preds_perturbed.shape[0:2], ), dtype=float)
+            for i in range(preds_perturbed.shape[0]):  # Iterate over batch
+                ci = cois[i]  # class of interest
 
-        for i in range(preds_perturbed.shape[0]):  # Iterate over batch
-            ci = cois[i]  # class of interest
+                for f_i in range(preds_perturbed.shape[1]):  # Iterate over masks (interpretable features)
+                    nPIR_f = np.empty((self.n_classes, ))  # vector with nPIR_f computed for each possible class
 
-            for f_i in range(preds_perturbed.shape[1]):  # Iterate over masks (interpretable features)
-                nPIR_f = np.empty((self.n_classes, ))  # vector with nPIR_f computed for each possible class
+                    for c in range(self.n_classes):
+                        p_o_c = preds_original[i, c]
+                        p_f_c = preds_perturbed[i, f_i, c]  # prob of image to be labeled as ci when f_i is perturbed
+                        alpha = self.inf_float((1 - p_o_c / p_f_c))
+                        beta = self.inf_float((1 - p_f_c / p_o_c))
+                        PIR_f_c = p_f_c * beta - p_o_c * alpha
+                        nPIR_f_c = self.softsign(PIR_f_c)
+                        nPIR_f[c] = nPIR_f_c
 
-                for c in range(self.n_classes):
-                    p_o_c = preds_original[i, c]
-                    p_f_c = preds_perturbed[i, f_i, c]  # prob of image to be labeled as ci when f_i is perturbed
-                    alpha = self.inf_float((1 - p_o_c / p_f_c))
-                    beta = self.inf_float((1 - p_f_c / p_o_c))
-                    PIR_f_c = p_f_c * beta - p_o_c * alpha
-                    nPIR_f_c = self.softsign(PIR_f_c)
-                    nPIR_f[c] = nPIR_f_c
+                    nPIR[i, f_i] = nPIR_f[ci]  # get the nPIR for the class of interest
 
-                nPIR[i, f_i] = nPIR_f[ci]  # get the nPIR for the class of interest
+                    # Compute nPIRP
+                    xi_vector = preds_original[i] * np.absolute(nPIR_f)
+                    xi_vector_no_ci = np.delete(xi_vector, ci)
+                    xi_ci = xi_vector[ci]
+                    xi_no_ci = np.sum(xi_vector_no_ci)
+                    a = self.inf_float((1 - xi_ci / xi_no_ci))
+                    b = self.inf_float((1 - xi_no_ci / xi_ci))
+                    PIRP_f_ci = xi_no_ci * b - xi_ci * a
+                    nPIRP_f_ci = self.softsign(PIRP_f_ci)
 
-                # Compute nPIRP
-                xi_vector = preds_original[i] * np.absolute(nPIR_f)
-                xi_vector_no_ci = np.delete(xi_vector, ci)
-                xi_ci = xi_vector[ci]
-                xi_no_ci = np.sum(xi_vector_no_ci)
-                a = self.inf_float((1 - xi_ci / xi_no_ci))
-                b = self.inf_float((1 - xi_no_ci / xi_ci))
-                PIRP_f_ci = xi_no_ci * b - xi_ci * a
-                nPIRP_f_ci = self.softsign(PIRP_f_ci)
-
-                nPIRP[i, f_i] = nPIRP_f_ci
-
-        end = perf_counter()
-        print(f"- numeric explanation: {end - start}")
+                    nPIRP[i, f_i] = nPIRP_f_ci
 
         # TODO: compute informativeness
 
@@ -377,38 +363,28 @@ class Explainer:
         X_masks, X_masks_map, X_masks_labels = self.generate_masks(X, feature_maps)
         images_perturbed, images_perturbed_origin_map = self.perturb(images, X_masks)
 
-        print(X_masks_map)
-        print(images_perturbed_origin_map)
-        print(images_perturbed)
+        for img in images_perturbed:
+            display(img)
 
-        start = perf_counter()
-        X_perturbed = self.preprocess_images(images_perturbed)
-        end = perf_counter()
-        print(f"- preprocess perturbed: ", end-start)
+        with Profiling("preprocess perturbed"):
+            X_perturbed = self.preprocess_images(images_perturbed)
 
-        start = perf_counter()
-        preds_original = self.model.predict(X)
-        end = perf_counter()
-        print(f"- predict originals:", end-start)
+        with Profiling("predict originals"):
+            preds_original = self.model.predict(X)
 
-        start = perf_counter()
-        preds_perturbed = self.model.predict(X_perturbed)
-        preds_perturbed = preds_perturbed.reshape((len(images), len(X_masks_map), -1))
-        end = perf_counter()
-        print(f"- predict perturbed: {end-start}")
+        with Profiling("predict perturbed"):
+            preds_perturbed = self.model.predict(X_perturbed)
+            preds_perturbed = preds_perturbed.reshape((len(images), len(X_masks_map), -1))
 
         nPIR, nPIRP = self.explain_numeric(preds_perturbed, preds_original, cois)
 
-        # for i in range(len(images)):
-        #     print(f"# image {i}")
-        #     for k_i in np.unique(X_masks_map):
-        #         print(f"* k={k_i+MIN_FEATURES}")
-        #         mask = X_masks_map == k_i
-        #         print(nPIR[i][mask])
-        #         self.explain_visual_old(images[i], X_masks[i][mask], nPIR[i][mask], nPIRP[i][mask])
-
-                # if k_i == 1:
-                #     return images[i], X_masks[i][mask], nPIR[i][mask], nPIRP[i][mask]
+        for i in range(len(images)):
+            print(f"# image {i}")
+            for k_i in np.unique(X_masks_map):
+                print(f"* k={k_i+MIN_FEATURES}")
+                mask = X_masks_map == k_i
+                print(nPIR[i][mask])
+                self.explain_visual_old(images[i], X_masks[i][mask], nPIR[i][mask], nPIRP[i][mask])
 
         # debug. gc to remove
         del X, hypercolumns, feature_maps, X_masks, images_perturbed, X_perturbed, preds_original, preds_perturbed
