@@ -181,7 +181,7 @@ class Explainer:
     def minibatchkmeans_cluster_hypercolumns(self, hypercolumns, min_features=2, max_features=5):
         RANDOM_STATE = 42
         MAX_ITER = 300
-        BATCH_SIZE = 500
+        BATCH_SIZE = 100
 
         # Each image has (max_features-min_features+1) feature maps, i.e., one
         # for each possible number of clusters. The best clustering will be
@@ -275,7 +275,7 @@ class Explainer:
             return -sys.float_info.max
         return x
 
-    def explain_numeric(self, preds_perturbed, preds_original, cois):
+    def explain_numeric(self, preds_perturbed, preds_original, X_masks_map, cois):
         """
         preds_perturbed (batch size, num masks per image, n_classes)
         preds_original (batch size, n_classes)
@@ -283,8 +283,11 @@ class Explainer:
         """
         with Profiling("numeric explanation"):
             # One set of scores per perturbed image (batch size * num masks per image scores)
-            nPIR = np.empty((*preds_perturbed.shape[0:2], ), dtype=float)
-            nPIRP = np.empty((*preds_perturbed.shape[0:2], ), dtype=float)
+            nPIR = np.empty(preds_perturbed.shape[0:2], dtype=float)
+            nPIRP = np.empty(preds_perturbed.shape[0:2], dtype=float)
+
+            # Informativeness vector: (batch_size, number of k's) e.g. (32, 4) if k=[2,5]
+            info = np.empty((len(preds_perturbed), len(np.unique(X_masks_map))), dtype='float32')
 
             for i in range(preds_perturbed.shape[0]):  # Iterate over batch
                 ci = cois[i]  # class of interest
@@ -315,12 +318,23 @@ class Explainer:
 
                     nPIRP[i, f_i] = nPIRP_f_ci
 
-        # TODO: compute informativeness
+                # informativeness: contrast of the nPIR values for each explanation
+                for k_i in np.unique(X_masks_map):
+                    mask = X_masks_map == k_i
+                    nPIR_i_k = nPIR[i][mask]
+                    info[i, k_i] = max(nPIR_i_k) - min(nPIR_i_k)
 
-        return nPIR, nPIRP
+            print(info)
+
+            # compute index of best explanation for each image, based on informativeness
+            best = np.empty(len(preds_perturbed), dtype=np.uint8)
+            for i in range(len(preds_perturbed)):
+                best[i] = np.argmax(info[i])
+
+        return nPIR, nPIRP, best
 
     @staticmethod
-    def explain_visual_old(image, X_masks, nPIR, nPIRP, cmap='RdYlGn'):
+    def OLD_explain_visual(image, X_masks, nPIR, nPIRP, cmap='RdYlGn'):
         nPIR_heatmap = np.sum(X_masks.astype(np.bool) * nPIR.reshape(-1, 1, 1), axis=0)
         nPIRP_heatmap = np.sum(X_masks.astype(np.bool) * nPIRP.reshape(-1, 1, 1), axis=0)
 
@@ -347,6 +361,99 @@ class Explainer:
 
         plt.show()
 
+    @staticmethod
+    def _find_centroid(init_x, X, n_iter=10):
+        new_x = init_x
+        f_X = X
+
+        for i in range(n_iter):
+            dist = np.linalg.norm(f_X - new_x, axis=1)
+            if f_X[dist < np.mean(dist)].__len__() > 0:
+                f_X = f_X[dist < np.mean(dist)]
+            else:
+                break
+
+            new_x = np.percentile(f_X, 50, interpolation="nearest", axis=0).astype(np.int64)
+
+        return new_x
+
+    def explain_visual(self, image, coi, X_masks, nPIR, nPIRP, cmap_features='Set3', cmap_index='RdYlGn'):
+        nPIR_heatmap = np.sum(X_masks.astype(np.bool) * nPIR.reshape(-1, 1, 1), axis=0)
+        feature_map_mask = np.zeros((X_masks.shape[1:3]), dtype=np.uint8)
+        centroids = []
+
+        fig, ax = plt.subplots(1, 3, figsize=(12, 4))
+        fig.tight_layout()
+
+        norm = mpl.colors.Normalize(vmin=-1.0, vmax=1.0)
+
+        # Feature map
+        ax[0].set_title("Feature map")
+        ax[0].imshow(image)
+
+        for f_i in range(len(X_masks)):  # iterate over feature IDs
+            # feature map mask può semplicemente contenere degli integers tipo 1, 2, 3 etc
+            # poi basta fare imshow con una colormap discreta che assegna automaticamente
+            # un colore diverso ad ogni integer
+
+            m = X_masks[f_i] > 0
+
+            x_coors, y_coors = np.where(m)
+            y_coor, x_coor = np.percentile(x_coors, 50).astype(int), np.percentile(y_coors, 50).astype(int)
+
+            coors = np.array([x_coors, y_coors]).transpose(1, 0)
+            coor = np.array([(x_coor, y_coor)])
+
+            coor = self._find_centroid(coor, coors)
+            y_coor, x_coor = coor[0], coor[1]
+
+            centroids.append((x_coor, y_coor))
+
+            feature_map_mask += ((m).astype(np.uint8)) * (f_i + 1)
+
+        ax[0].imshow(feature_map_mask, cmap=cmap_features, alpha=0.8, interpolation='nearest')
+        for f_i, (x_coor, y_coor) in enumerate(centroids):
+            txt = ax[0].text(x_coor, y_coor, f"{f_i}", color="black", ha='center', va='center', fontsize=20)
+            # path_effects=[mpl.patheffects.withStroke(linewidth=3, foreground="w")])
+
+        ax[0].grid(False)
+        ax[0].set_xticks([])
+        ax[0].set_yticks([])
+
+        # nPIR/nPIRP chart
+        x = np.arange(len(nPIR), dtype=np.uint8)
+        width = 0.4
+        ax[1].set_title(f"nPIR and nPIRP for COI: {coi}")
+        rects1 = ax[1].bar(x - width / 2, nPIR, width, label="nPIR")
+        rects2 = ax[1].bar(x + width / 2, nPIRP, width, label="nPIRP")
+        ax[1].set_ylim([-1.2, 1.2])
+        ax[1].set_xticks(x)
+        ax[1].legend()
+        ax[1].axhline(y=0, color="black", lw=1)
+        ax[1].bar_label(rects1, fmt="%.2f", padding=3)
+        ax[1].bar_label(rects2, fmt="%.2f", padding=3)
+        ax[1].set_xlabel("Feature ID")
+
+        # nPIR heatmap
+        ax[2].set_title("nPIR heatmap")
+        ax[2].imshow(image)
+        ax[2].contourf(np.arange(224), np.arange(224), nPIR_heatmap, cmap=cmap_index, norm=norm, alpha=0.6, antialiased=True)
+        ax[2].grid(False)
+        ax[2].set_xticks([])
+        ax[2].set_yticks([])
+
+        colors = plt.cm.ScalarMappable(norm=norm, cmap=plt.get_cmap(cmap_index)).to_rgba(nPIR_heatmap)
+        cb_ax = fig.add_axes([1, 0.12, 0.02, 0.8])
+        cb = mpl.colorbar.ColorbarBase(
+            cb_ax,
+            cmap=plt.get_cmap(cmap_index),
+            norm=norm,
+            orientation='vertical'
+        )
+        cb.set_label("nPIR")
+
+        plt.show()
+
     def fit_batch(self, images, cois, min_features=2, max_features=5):
         """Fit explainer to batch of images.
 
@@ -354,37 +461,31 @@ class Explainer:
         cois: np array of shape (n,)
         """
 
-        MIN_FEATURES = 2
-        MAX_FEATURES = 5
-
         X = self.preprocess_images(images)
         hypercolumns = self.extract_hypercolumns(X)
-        feature_maps = self.kmeans_cluster_hypercolumns(hypercolumns)
+        feature_maps = self.kmeans_cluster_hypercolumns(hypercolumns, min_features=min_features, max_features=max_features)
         X_masks, X_masks_map, X_masks_labels = self.generate_masks(X, feature_maps)
         images_perturbed, images_perturbed_origin_map = self.perturb(images, X_masks)
-
-        for img in images_perturbed:
-            display(img)
 
         with Profiling("preprocess perturbed"):
             X_perturbed = self.preprocess_images(images_perturbed)
 
         with Profiling("predict originals"):
-            preds_original = self.model.predict(X)
+            preds_original = self.model.predict(X, batch_size=len(X))
 
         with Profiling("predict perturbed"):
-            preds_perturbed = self.model.predict(X_perturbed)
+            preds_perturbed = self.model.predict(X_perturbed, batch_size=len(X_perturbed))
             preds_perturbed = preds_perturbed.reshape((len(images), len(X_masks_map), -1))
 
-        nPIR, nPIRP = self.explain_numeric(preds_perturbed, preds_original, cois)
+        nPIR, nPIRP, best = self.explain_numeric(preds_perturbed, preds_original, X_masks_map, cois)
+
+        print(best)
 
         for i in range(len(images)):
             print(f"# image {i}")
             for k_i in np.unique(X_masks_map):
-                print(f"* k={k_i+MIN_FEATURES}")
                 mask = X_masks_map == k_i
-                print(nPIR[i][mask])
-                self.explain_visual_old(images[i], X_masks[i][mask], nPIR[i][mask], nPIRP[i][mask])
+                self.explain_visual(images[i], cois[i], X_masks[i][mask], nPIR[i][mask], nPIRP[i][mask])
 
         # debug. gc to remove
         del X, hypercolumns, feature_maps, X_masks, images_perturbed, X_perturbed, preds_original, preds_perturbed
