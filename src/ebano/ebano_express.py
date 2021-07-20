@@ -18,9 +18,6 @@ import sys
 
 import pandas as pd
 
-# Profiling
-from time import perf_counter
-
 
 class PerturbationScores:
 
@@ -507,37 +504,19 @@ class LocalExplanationModel:
         return X_r
 
     def extract_hypercolumns(self, input_image, verbose=False):
-        start = perf_counter()
         x = self.preprocess_func(input_image)
-        end = perf_counter()
-        print("preprocess_func total", end-start)
-
-        start = perf_counter()
         hc = self.get_hypercolumns(x)
-        end = perf_counter()
-        print("get_hypercolumns total", end-start)
-
-        start = perf_counter()
         hc_t = hc.transpose([2, 1, 0]).reshape(self.model_input_shape[0] * self.model_input_shape[1], -1)  # e.g. 224*224 = 50176  color transpose, tensor reshape
-        end = perf_counter()
-        print("transpose total", end-start)
-
-        start = perf_counter()
         hc_r = self._features_reduction(hc_t)
-        end = perf_counter()
-        print("_features_reduction total", end-start)
 
         return hc_r
 
     def compute_features_map(self, hc, n_features):
-        start = perf_counter()
         hc_n = normalize(hc, norm='l2', axis=1)
         kmeans_model = KMeans(n_clusters=n_features, max_iter=300, random_state=42)
         features_labels = kmeans_model.fit_predict(hc_n)
         features_map = features_labels.reshape(self.model_input_shape[0], self.model_input_shape[1]).astype(np.uint8)
         features_map += 1
-        end = perf_counter()
-        print("kmeans total", end-start)
         return features_map
 
     def fit_explanation(self, verbose=False):
@@ -546,15 +525,11 @@ class LocalExplanationModel:
         for n_f in range(2, self.max_features+1):
             features_map = self.compute_features_map(hc, n_f)
             print(f"> Computing explanation with '{n_f}' features...") if verbose else None
-
-            start = perf_counter()
             local_expl_model = LocalExplanation(self.input_image, self.class_of_interest, features_map, self.model,
                                                 preprocess_func=self.preprocess_func)
 
             local_expl_model.fit_explanation()
             self.local_explanations[n_f] = local_expl_model
-            end = perf_counter()
-            print("fitting explanation total", end-start)
 
         self.best_explanation = self.compute_best_explanation()
 
