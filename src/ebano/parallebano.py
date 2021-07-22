@@ -80,7 +80,11 @@ class Explainer:
 
         return X
 
-    def extract_hypercolumns(self, X, n_components=30):
+    def extract_hypercolumns(self, X, n_components=30, reduction_type=None):
+        """
+        type of dimensionality reduction can be: "batch", "fit-first", "tsvd", None
+        """
+
         # Extract feature maps. Return a list of length == len(self.layers),
         # i.e., one feature map per convolutional layer to analyze.
         feature_maps = K.function([self.model.layers[0].input], self.layers)(X)
@@ -116,10 +120,9 @@ class Explainer:
 
         with Profiling("dimensionality reduction"):
             # Dimensionality reduction of feature maps
-            # TODO: use TruncatedSVD with sparse matrices instead of PCA -- possible speedup
+            # TODO: try TruncatedSVD with sparse matrices instead of PCA -- possible speedup
             #  see: https://stats.stackexchange.com/questions/199501/user-segmentation-by-clustering-with-sparse-data
-            PCA_TYPE = None  # "batch", "fit-first", None
-            if PCA_TYPE == "fit-first":
+            if reduction_type == "fit-first":
                 hc_pca = np.empty((batch_size, hc.shape[1], n_components), dtype='float32')
                 pca = PCA(n_components=n_components, copy=False)
                 print(f"fitting PCA")
@@ -127,19 +130,33 @@ class Explainer:
                 for i in range(1, batch_size):
                     print(f"performing PCA {i}")
                     hc_pca[i] = pca.transform(hc[i])
-            elif PCA_TYPE == "batch":
+            elif reduction_type == "batch":
                 # hc_pca = np.empty((batch_size * hc.shape[1], n_components), dtype='float32')
                 pca = PCA(n_components=n_components, copy=False)
                 hc_pca = pca.fit_transform(hc.reshape((-1, n_features_hc)))
                 hc_pca = hc_pca.reshape((batch_size, hc.shape[1], n_components))
-            else:
+            elif reduction_type == "tsvd":
                 hc_pca = np.empty((batch_size, hc.shape[1], n_components), dtype='float32')
-                pca = PCA(n_components=n_components, copy=False)
+                for i in range(batch_size):
+                    print(f"performing SVD {i}")
+                    tsvd = TruncatedSVD(n_components=n_components)
+                    hc_pca[i] = tsvd.fit_transform(hc[i])  # fit_transform accepts (n_samples=n_pixels, n_components)
+            else:
+                # TODO: problem here -- memory leak: memory consumption goes up very high with PCA in this loop.
+                #  Things I've tried (that did not work):
+                #  - move pca initializer outside the loop
+                #  - move pca initializer inside the loop
+                #  - delete the pca variable and garbage collect it at each loop
+                #  - use 'randomized' algorithm
+                #  Note that the problem does not present in the 'fit-first' approach. This means that the problem
+                #  is not the allocation of hc_pca
+                hc_pca = np.empty((batch_size, hc.shape[1], n_components), dtype='float32')
                 for i in range(batch_size):
                     print(f"performing PCA {i}")
+                    pca = PCA(n_components=n_components, copy=False)
                     hc_pca[i] = pca.fit_transform(hc[i])  # fit_transform accepts (n_samples=n_pixels, n_components)
 
-            ### TRUNCATEDSVD ###
+            # TRUNCATEDSVD
             # hc_svd = np.empty((batch_size, hc.shape[1], n_components), dtype='float32')
             # svd = TruncatedSVD(n_components=n_components)
             # for i in range(batch_size):
@@ -152,9 +169,8 @@ class Explainer:
 
         return hc_pca  # (batch_size, n_pixels, n_components)
 
-    def kmeans_cluster_hypercolumns(self, hypercolumns, min_features=2, max_features=5):
+    def kmeans_cluster_hypercolumns(self, hypercolumns, min_features=2, max_features=5, max_iter=300):
         RANDOM_STATE = 42
-        MAX_ITER = 300
 
         # Each image has (max_features-min_features+1) feature maps, i.e., one
         # for each possible number of clusters. The best clustering will be
@@ -170,7 +186,7 @@ class Explainer:
 
                 for n_features in range(min_features, max_features+1):
                     print(f"computing explanation for {n_features} n_features")
-                    model = KMeans(n_clusters=n_features, max_iter=MAX_ITER, random_state=RANDOM_STATE)
+                    model = KMeans(n_clusters=n_features, max_iter=max_iter, random_state=RANDOM_STATE)
                     feature_map = model.fit_predict(hc_n)
                     feature_maps[i, n_features-min_features] = feature_map.reshape(*self.input_shape[0:2]).astype(np.uint8)
 
@@ -178,10 +194,8 @@ class Explainer:
 
         return feature_maps
 
-    def minibatchkmeans_cluster_hypercolumns(self, hypercolumns, min_features=2, max_features=5):
+    def minibatchkmeans_cluster_hypercolumns(self, hypercolumns, min_features=2, max_features=5, max_iter=300, batch_size=100):
         RANDOM_STATE = 42
-        MAX_ITER = 300
-        BATCH_SIZE = 100
 
         # Each image has (max_features-min_features+1) feature maps, i.e., one
         # for each possible number of clusters. The best clustering will be
@@ -197,7 +211,7 @@ class Explainer:
 
                 for n_features in range(min_features, max_features+1):
                     print(f"computing explanation for {n_features} n_features")
-                    model = MiniBatchKMeans(n_clusters=n_features, max_iter=MAX_ITER, batch_size=BATCH_SIZE, random_state=RANDOM_STATE)
+                    model = MiniBatchKMeans(n_clusters=n_features, max_iter=max_iter, batch_size=batch_size, random_state=RANDOM_STATE)
                     feature_map = model.fit_predict(hc_n)
                     feature_maps[i, n_features-min_features] = feature_map.reshape(*self.input_shape[0:2]).astype(np.uint8)
 
@@ -324,11 +338,9 @@ class Explainer:
                     nPIR_i_k = nPIR[i][mask]
                     info[i, k_i] = max(nPIR_i_k) - min(nPIR_i_k)
 
-            print(info)
-
             # compute index of best explanation for each image, based on informativeness
-            best = np.empty(len(preds_perturbed), dtype=np.uint8)
-            for i in range(len(preds_perturbed)):
+            best = np.empty(len(preds_original), dtype=np.uint8)
+            for i in range(len(preds_original)):
                 best[i] = np.argmax(info[i])
 
         return nPIR, nPIRP, best
@@ -454,7 +466,7 @@ class Explainer:
 
         plt.show()
 
-    def fit_batch(self, images, cois, min_features=2, max_features=5):
+    def fit_batch(self, images, cois, min_features=2, max_features=5, display_plots=True, **TEST_PARAMS):
         """Fit explainer to batch of images.
 
         images (list of PIL images) of length n
@@ -462,8 +474,13 @@ class Explainer:
         """
 
         X = self.preprocess_images(images)
-        hypercolumns = self.extract_hypercolumns(X)
-        feature_maps = self.kmeans_cluster_hypercolumns(hypercolumns, min_features=min_features, max_features=max_features)
+        hypercolumns = self.extract_hypercolumns(X, reduction_type=TEST_PARAMS["reduction_type"])
+
+        if TEST_PARAMS["cluster_type"] == "kmeans":
+            feature_maps = self.kmeans_cluster_hypercolumns(hypercolumns, min_features=min_features, max_features=max_features)
+        if TEST_PARAMS["cluster_type"] == "minibatchkmeans":
+            feature_maps = self.minibatchkmeans_cluster_hypercolumns(hypercolumns, min_features=min_features, max_features=max_features, max_iter=TEST_PARAMS["max_iter"], batch_size=TEST_PARAMS["batch_size"])
+
         X_masks, X_masks_map, X_masks_labels = self.generate_masks(X, feature_maps)
         images_perturbed, images_perturbed_origin_map = self.perturb(images, X_masks)
 
@@ -471,22 +488,21 @@ class Explainer:
             X_perturbed = self.preprocess_images(images_perturbed)
 
         with Profiling("predict originals"):
-            preds_original = self.model.predict(X, batch_size=len(X))
+            preds_original = self.model.predict(X, batch_size=len(X), verbose=1)
 
         with Profiling("predict perturbed"):
-            preds_perturbed = self.model.predict(X_perturbed, batch_size=len(X_perturbed))
+            preds_perturbed = self.model.predict(X_perturbed, batch_size=len(X_perturbed), verbose=1)
             preds_perturbed = preds_perturbed.reshape((len(images), len(X_masks_map), -1))
 
         nPIR, nPIRP, best = self.explain_numeric(preds_perturbed, preds_original, X_masks_map, cois)
 
-        print(best)
-
-        for i in range(len(images)):
-            print(f"# image {i}")
-            for k_i in np.unique(X_masks_map):
-                mask = X_masks_map == k_i
+        if display_plots:
+            for i in range(len(images)):
+                print(f"# image {i}, best explanation k={best[i]+min_features}")
+                k_best = best[i]
+                mask = X_masks_map == k_best
                 self.explain_visual(images[i], cois[i], X_masks[i][mask], nPIR[i][mask], nPIRP[i][mask])
 
-        # debug. gc to remove
-        del X, hypercolumns, feature_maps, X_masks, images_perturbed, X_perturbed, preds_original, preds_perturbed
-        gc.collect()
+        # # debug. gc to remove
+        # del X, hypercolumns, feature_maps, X_masks, images_perturbed, X_perturbed, preds_original, preds_perturbed
+        # gc.collect()
