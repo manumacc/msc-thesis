@@ -80,7 +80,7 @@ class Explainer:
 
         return X
 
-    def extract_hypercolumns(self, X, n_components=30, reduction_type=None):
+    def extract_hypercolumns(self, X, n_components=30, reduction_type=None, normalization=None):
         """
         type of dimensionality reduction can be: "batch", "fit-first", "tsvd", None
         """
@@ -118,9 +118,20 @@ class Explainer:
 
             hc = hc.reshape((batch_size, n_features_hc, np.prod(image_size))).transpose((0, 2, 1))  # (batch_size, 224*224 = 50176, n_features_hc)
 
+        with Profiling("normalization of hc"):
+            if normalization == "standardize":
+                # Standardization is performed feature-by-feature, across all points and images
+                hc = (hc - np.mean(hc, axis=(0, 1))) / (np.std(hc, axis=(0, 1)))
+
+            if normalization == "standardize-per-image":
+                # Standardization is performed feature-by-feature, and individually image-by-image
+                pass
+
         with Profiling("dimensionality reduction"):
             # Dimensionality reduction of feature maps
             # TODO: try TruncatedSVD with sparse matrices instead of PCA -- possible speedup
+            #  However: note that standardization must be performed in a way that does not render the matrix dense
+            #  (cannot subtract mean)
             #  see: https://stats.stackexchange.com/questions/199501/user-segmentation-by-clustering-with-sparse-data
             if reduction_type == "fit-first":
                 hc_pca = np.empty((batch_size, hc.shape[1], n_components), dtype='float32')
@@ -474,7 +485,7 @@ class Explainer:
         """
 
         X = self.preprocess_images(images)
-        hypercolumns = self.extract_hypercolumns(X, reduction_type=TEST_PARAMS["reduction_type"])
+        hypercolumns = self.extract_hypercolumns(X, reduction_type=TEST_PARAMS["reduction_type"], normalization=TEST_PARAMS.get("standardize"))
 
         if TEST_PARAMS["cluster_type"] == "kmeans":
             feature_maps = self.kmeans_cluster_hypercolumns(hypercolumns, min_features=min_features, max_features=max_features)
