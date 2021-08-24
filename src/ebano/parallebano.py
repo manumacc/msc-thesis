@@ -53,7 +53,7 @@ class Explainer:
         return layer_indexes
 
     @staticmethod
-    def _pil_to_numpy(image):
+    def _pil_to_ndarray(image):
         """Convert a PIL Image instance to a numpy array"""
 
         x = np.asarray(image, dtype='float32')
@@ -69,7 +69,7 @@ class Explainer:
         X = np.empty(shape=(len(images), *self.input_shape), dtype='float32')
 
         for i, img in enumerate(images):
-            x = self._pil_to_numpy(img)
+            x = self._pil_to_ndarray(img)
 
             if x.shape != self.input_shape:
                 raise ValueError(f"Image must be of shape {self.input_shape}, instead received {x.shape}")
@@ -476,6 +476,43 @@ class Explainer:
         cb.set_label("nPIR")
 
         plt.show()
+
+    def ALD_fit_batch(self, images, cois, min_features=2, max_features=5, display_plots=True, **TEST_PARAMS):
+        """Fit explainer to batch of images.
+
+        images (list of PIL images) of length n
+        cois: np array of shape (n,)
+        """
+
+        X = self.preprocess_images(images)
+        hypercolumns = self.extract_hypercolumns(X, reduction_type=TEST_PARAMS["reduction_type"], normalization=TEST_PARAMS.get("standardize"))
+
+        if TEST_PARAMS["cluster_type"] == "kmeans":
+            feature_maps = self.kmeans_cluster_hypercolumns(hypercolumns, min_features=min_features, max_features=max_features)
+        if TEST_PARAMS["cluster_type"] == "minibatchkmeans":
+            feature_maps = self.minibatchkmeans_cluster_hypercolumns(hypercolumns, min_features=min_features, max_features=max_features, max_iter=TEST_PARAMS["max_iter"], batch_size=TEST_PARAMS["batch_size"])
+
+        X_masks, X_masks_map, X_masks_labels = self.generate_masks(X, feature_maps)
+        images_perturbed, images_perturbed_origin_map = self.perturb(images, X_masks)
+
+        with Profiling("preprocess perturbed"):
+            X_perturbed = self.preprocess_images(images_perturbed)
+
+        with Profiling("predict originals"):
+            preds_original = self.model.predict(X, batch_size=len(X), verbose=1)
+
+        with Profiling("predict perturbed"):
+            preds_perturbed = self.model.predict(X_perturbed, batch_size=len(X_perturbed), verbose=1)
+            preds_perturbed = preds_perturbed.reshape((len(images), len(X_masks_map), -1))
+
+        nPIR, nPIRP, best = self.explain_numeric(preds_perturbed, preds_original, X_masks_map, cois)
+
+        if display_plots:
+            for i in range(len(images)):
+                print(f"# image {i}, best explanation k={best[i]+min_features}")
+                k_best = best[i]
+                mask = X_masks_map == k_best
+                self.explain_visual(images[i], cois[i], X_masks[i][mask], nPIR[i][mask], nPIRP[i][mask])
 
     def fit_batch(self, images, cois, min_features=2, max_features=5, display_plots=True, **TEST_PARAMS):
         """Fit explainer to batch of images.
