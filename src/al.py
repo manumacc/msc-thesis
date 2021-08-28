@@ -5,13 +5,27 @@ import numpy as np
 
 from PIL import Image
 
+from tensorflow.keras.optimizers import SGD
+from tensorflow.keras.losses import CategoricalCrossentropy
+
 
 class ActiveLearning:
-    def __init__(self, path, classes, target_size=None, sample=None, init_size=None, seed=None):
-        self.X, self.y = self.load_dataset(path, classes, target_size=target_size, sample=sample, seed=seed)
-        self.idx_train = self.create_initial(init_size=init_size, seed=seed)
+    def __init__(self, path, query_strategy, model, preprocess_input_fn, target_size, class_sample_size, init_size, test_size, seed=None):
+        self.query_strategy = query_strategy
 
-    def load_dataset(self, path, classes, target_size=None, sample=None, seed=None):
+        self.model = model
+        self.preprocess_input_fn = preprocess_input_fn
+        self.target_size = target_size
+
+        self.init_size = init_size
+        self.test_size = test_size
+
+        self.X, self.y, self.classes = self.load_dataset(path, class_sample_size, seed=seed)
+        self.idx_train, self.idx_test = self.initialize_dataset(init_size, test_size, seed=seed)
+
+        self.logs = []
+
+    def load_dataset(self, path, sample_size, seed=None):
         """
         Load an image dataset into a numpy array X along with target classes in y
 
@@ -26,10 +40,10 @@ class ActiveLearning:
             ...
             classN/
 
-        sample: how many elements to sample from each class
+        sample_size: how many elements to sample from each class
         seed: if set, seeds the sample
 
-        X: (n samples, weight, height, channels)
+        X: (n samples, weight, height, channels) -- non-preprocessed PIL images in np format
         y: (n samples, )
         [to implement] class_id (dict): {0: classname0, 1: classname1, ...}
         """
@@ -37,20 +51,23 @@ class ActiveLearning:
         X = []
         y = []
 
+        (_, dirs, _) = next(os.walk(path))
+        classes = sorted(dirs)  # ensure order
+
         for i, cls in enumerate(classes):
             cpath = os.path.join(path, cls)
             (_, _, filenames) = next(os.walk(cpath))
 
-            if sample:
+            if sample_size:
                 random.seed(seed)
-                filenames = random.sample(filenames, k=sample)
+                filenames = random.sample(filenames, k=sample_size)
 
             arrs = []
 
             for f in filenames:
                 fpath = os.path.join(cpath, f)
 
-                img = self._load_img(fpath, target_size=target_size)
+                img = self._load_img(fpath, target_size=self.target_size)
                 arr = self._pil_to_ndarray(img)
                 arrs.append(arr)
 
@@ -63,40 +80,143 @@ class ActiveLearning:
         X = np.concatenate(X)
         y = np.concatenate(y)
 
-        return X, y
+        y = self._one_hot_encode(y)
 
-    def create_initial(self, init_size=None, seed=None):
-        """Create initial training dataset and unlabeled pool"""
+        return X, y, classes
 
-        if init_size is None:
-            init_size = 0.1
+    def initialize_dataset(self, init_size, test_size, seed=None):
+        """Create initial training dataset, unlabeled pool and test set
+
+        init_size: initial training set size
+        test_size: test set size
+        """
 
         rng = np.random.default_rng(seed)
 
         idx = np.arange(0, self.X.shape[0])
         idx_init = rng.choice(idx, size=int(len(idx) * init_size), replace=False)
 
-        return idx_init
+        idx_non_init = np.delete(idx, idx_init)
+        idx_test = rng.choice(idx_non_init, size=int(len(idx) * test_size), replace=False)
 
-    def get_training(self):
+        return idx_init, idx_test
+
+    def initialize_model(self):
+        """Train model on initial training set"""
+
+        pass
+
+    def get_train(self, preprocess=True):
         """Get current training dataset"""
 
-        return self.idx_train
+        X_train = self.X[self.idx_train]
+        if preprocess:
+            X_train = self.preprocess_input_fn(X_train)
 
-    def get_pool(self, batch_size=None):
-        """Get current unlabeled pool. Accepts batching"""
+        return X_train, self.y[self.idx_train]
+
+    def get_test(self, preprocess=True):
+        """Get test dataset"""
+
+        X_test = self.X[self.idx_test]
+        if preprocess:
+            X_test = self.preprocess_input_fn(X_test)
+
+        return X_test, self.y[self.idx_test]
+
+    def get_pool(self, preprocess=True):
+        """Get current unlabeled pool"""
 
         idx = np.arange(0, self.X.shape[0])
-        idx_pool = np.delete(idx, self.idx_train)
+        idx_pool = np.delete(idx, np.concatenate([self.idx_train, self.idx_test]))
 
-        return idx_pool
+        X_pool = self.X[idx_pool]
+        if preprocess:
+            X_pool = self.preprocess_input_fn(X_pool)
+
+        return X_pool, self.y[idx_pool], idx_pool
 
     def add_to_training(self, idx):
         """Move a batch of labeled data from the unlabeled pool to the training
         dataset
         """
 
-        self.idx_train = np.concatenate(self.idx_train, idx)
+        self.idx_train = np.concatenate([self.idx_train, idx])
+
+    def query(self, X_pool, n_query_instances, seed=None):
+        """
+        X_pool: pool data
+        n_query_instances: how many instances to query from the pool
+        """
+
+        return self.query_strategy(X_pool, n_query_instances, seed=seed)
+
+    def teach(self, X_train, y_train):
+        pass
+
+    def learn(self, n_loops, n_query_instances, seed=None):
+        """
+
+        seed is applied to query call
+        """
+
+        print("Total dataset size:", len(self.X))
+
+        # Initial training
+        # TODO: put everything inside self.initialize_model and the fit step
+        #  inside self.teach
+        # self.initialize_model()
+        lr_init = 0.1
+        batch_size = 64
+        n_epochs = 2
+
+        optimizer = SGD(learning_rate=lr_init)
+        self.model.compile(optimizer=optimizer,
+                           loss=CategoricalCrossentropy(),
+                           metrics=["accuracy"])
+
+        X_train, y_train = self.get_train()
+
+        self.model.fit(X_train, y_train,
+                       batch_size=batch_size,
+                       epochs=n_epochs,
+                       shuffle=True)
+
+        X_test, y_test = self.get_test()
+        test_log = self.model.evaluate(X_test, y_test, batch_size=None)
+        self.logs.append(test_log)
+
+        # Active learning loop
+        for i in range(n_loops):
+            print("AL STEP #", i+1)
+
+            X_pool, y_pool, idx_pool = self.get_pool()
+
+            print("shape of pool (pre query)", X_pool.shape, y_pool.shape)
+
+            # Query
+            idx_query = self.query(X_pool, n_query_instances, seed=seed)
+            self.add_to_training(idx_pool[idx_query])
+
+            # Teach
+            # TODO: put this step inside self.teach
+            X_train, y_train = self.get_train()
+
+            self.model.fit(X_train, y_train,
+                           batch_size=batch_size,
+                           epochs=n_epochs,
+                           shuffle=True)
+
+            X_pool, y_pool, idx_pool = self.get_pool()  # DEBUG -- REMOVE THIS LINE!
+
+            print("shape of pool (post query)", X_pool.shape, y_pool.shape)
+            print("shape of train (post query)", X_train.shape, y_train.shape)
+
+            print("intersect pool & train (should be empty)", np.intersect1d(self.idx_train, idx_pool))
+
+            # Test
+            test_log = self.model.evaluate(X_test, y_test, batch_size=None)
+            self.logs.append(test_log)
 
     @staticmethod
     def _load_img(path, grayscale=False, target_size=None):
@@ -127,7 +247,7 @@ class ActiveLearning:
         if len(x.shape) == 2:
             x = x.reshape((x.shape[0], x.shape[1], 1))
         elif len(x.shape) != 3:
-            raise ValueError(f"Unsupported image shape: {(x.shape,)}")
+            raise ValueError(f"Unsupported image shape: {x.shape}")
 
         return x
 
@@ -142,4 +262,14 @@ class ActiveLearning:
         elif x.shape[2] == 3:
             return Image.fromarray(x, 'RGB')
         else:
-            raise ValueError(f"Unsupported image shape: {(x.shape,)}")
+            raise ValueError(f"Unsupported image shape: {x.shape}")
+
+    @staticmethod
+    def _one_hot_encode(y):
+        if y.ndim != 1:
+            raise ValueError(f"Unsupported shape: {y.shape}")
+
+        y_one_hot = np.zeros((y.size, y.max()+1))
+        y_one_hot[np.arange(y.size), y] = 1
+
+        return y_one_hot
