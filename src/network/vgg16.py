@@ -2,6 +2,7 @@ from tensorflow.keras import layers
 from tensorflow.keras import Model
 
 def VGG16(n_classes,
+          dropout_rate=0.5,
           input_shape=(224, 224, 3)):
     """
     VGG16 model for training and inference based on the original paper.
@@ -52,8 +53,11 @@ def VGG16(n_classes,
 
     # Dense block
     x = layers.Flatten(name='flatten')(x)
+
     x = layers.Dense(4096, activation='relu', name='fc1')(x)
-    x = layers.Dense(4096, activation='relu', name='fc1')(x)
+    x = layers.Dropout(dropout_rate, name='fc1_dropout')(x)
+    x = layers.Dense(4096, activation='relu', name='fc2')(x)
+    x = layers.Dropout(dropout_rate, name='fc2_dropout')(x)
 
     out = layers.Dense(n_classes, activation='softmax', name='predictions')(x)
 
@@ -61,6 +65,3 @@ def VGG16(n_classes,
     model = Model(inputs=inp, outputs=out, name='vgg16')
 
     return model
-
-def preprocess_input():
-    pass
