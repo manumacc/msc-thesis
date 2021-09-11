@@ -10,7 +10,18 @@ from tensorflow.keras.losses import CategoricalCrossentropy
 
 
 class ActiveLearning:
-    def __init__(self, path, query_strategy, model, preprocess_input_fn, target_size, class_sample_size, init_size, test_size, seed=None):
+    def __init__(self,
+                 path_train,
+                 path_test,
+                 query_strategy,
+                 model,
+                 preprocess_input_fn,
+                 target_size,
+                 class_sample_size_train,
+                 class_sample_size_test,
+                 init_size,
+                 val_size,
+                 seed=None):
         self.query_strategy = query_strategy
 
         self.model = model
@@ -18,10 +29,17 @@ class ActiveLearning:
         self.target_size = target_size
 
         self.init_size = init_size
-        self.test_size = test_size
+        self.val_size = val_size
 
-        self.X, self.y, self.classes = self.load_dataset(path, class_sample_size, seed=seed)
-        self.idx_train, self.idx_test = self.initialize_dataset(init_size, test_size, seed=seed)
+        self.X, self.y, classes_train = self.load_dataset(path_train, class_sample_size_train, seed=seed)
+        self.X_test, self.y_test, classes_test = self.load_dataset(path_test, class_sample_size_test, seed=seed)
+
+        if classes_train != classes_test:
+            raise ValueError("Train and test classes differ")
+
+        self.classes = classes_train
+
+        self.idx_train = self.initialize_dataset(init_size, seed=seed)
 
         self.logs = []
 
@@ -48,8 +66,7 @@ class ActiveLearning:
         [to implement] class_id (dict): {0: classname0, 1: classname1, ...}
         """
 
-        X = []
-        y = []
+        X, y = [], []
 
         (_, dirs, _) = next(os.walk(path))
         classes = sorted(dirs)  # ensure order
@@ -57,6 +74,7 @@ class ActiveLearning:
         for i, cls in enumerate(classes):
             cpath = os.path.join(path, cls)
             (_, _, filenames) = next(os.walk(cpath))
+            filenames = sorted(filenames)
 
             if sample_size:
                 random.seed(seed)
@@ -77,18 +95,18 @@ class ActiveLearning:
             X.append(X_c)
             y.append(y_c)
 
-        X = np.concatenate(X)
-        y = np.concatenate(y)
-
+        X, y = np.concatenate(X), np.concatenate(y)
         y = self._one_hot_encode(y)
 
         return X, y, classes
 
-    def initialize_dataset(self, init_size, test_size, seed=None):
-        """Create initial training dataset, unlabeled pool and test set
+    def initialize_dataset(self, init_size, seed=None):
+        """Create initial training set and unlabeled pool.
+
+        The initial training set is used to train a baseline model.
 
         init_size: initial training set size
-        test_size: test set size
+        val_size: validation set size
         """
 
         rng = np.random.default_rng(seed)
@@ -96,10 +114,7 @@ class ActiveLearning:
         idx = np.arange(0, self.X.shape[0])
         idx_init = rng.choice(idx, size=int(len(idx) * init_size), replace=False)
 
-        idx_non_init = np.delete(idx, idx_init)
-        idx_test = rng.choice(idx_non_init, size=int(len(idx) * test_size), replace=False)
-
-        return idx_init, idx_test
+        return idx_init
 
     def initialize_model(self):
         """Train model on initial training set"""
@@ -115,20 +130,11 @@ class ActiveLearning:
 
         return X_train, self.y[self.idx_train]
 
-    def get_test(self, preprocess=True):
-        """Get test dataset"""
-
-        X_test = self.X[self.idx_test]
-        if preprocess:
-            X_test = self.preprocess_input_fn(X_test)
-
-        return X_test, self.y[self.idx_test]
-
     def get_pool(self, preprocess=True):
         """Get current unlabeled pool"""
 
         idx = np.arange(0, self.X.shape[0])
-        idx_pool = np.delete(idx, np.concatenate([self.idx_train, self.idx_test]))
+        idx_pool = np.delete(idx, self.idx_train)
 
         X_pool = self.X[idx_pool]
         if preprocess:
@@ -156,7 +162,6 @@ class ActiveLearning:
 
     def learn(self, n_loops, n_query_instances, seed=None):
         """
-
         seed is applied to query call
         """
 
@@ -166,24 +171,28 @@ class ActiveLearning:
         # TODO: put everything inside self.initialize_model and the fit step
         #  inside self.teach
         # self.initialize_model()
-        lr_init = 0.1
-        batch_size = 64
-        n_epochs = 2
+        lr_init = 0.01
+        momentum = 0.9
+        batch_size = 256
+        n_epochs = 2  # should be between 50-100, with early stopping when the
+        # validation set accuracy stops improving for the third time
 
-        optimizer = SGD(learning_rate=lr_init)
+        loss_fn = CategoricalCrossentropy()
+
+        optimizer = SGD(learning_rate=lr_init, momentum=momentum)
         self.model.compile(optimizer=optimizer,
-                           loss=CategoricalCrossentropy(),
+                           loss=loss_fn,
                            metrics=["accuracy"])
 
         X_train, y_train = self.get_train()
 
         self.model.fit(X_train, y_train,
+                       validation_split=self.val_size,
                        batch_size=batch_size,
                        epochs=n_epochs,
                        shuffle=True)
 
-        X_test, y_test = self.get_test()
-        test_log = self.model.evaluate(X_test, y_test, batch_size=None)
+        test_log = self.model.evaluate(self.X_test, self.y_test, batch_size=None)
         self.logs.append(test_log)
 
         # Active learning loop
@@ -215,7 +224,7 @@ class ActiveLearning:
             print("intersect pool & train (should be empty)", np.intersect1d(self.idx_train, idx_pool))
 
             # Test
-            test_log = self.model.evaluate(X_test, y_test, batch_size=None)
+            test_log = self.model.evaluate(self.X_test, self.y_test, batch_size=None)
             self.logs.append(test_log)
 
     @staticmethod
