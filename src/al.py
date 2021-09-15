@@ -61,7 +61,7 @@ class ActiveLearning:
         sample_size: how many elements to sample from each class
         seed: if set, seeds the sample
 
-        X: (n samples, weight, height, channels) -- non-preprocessed PIL images in np format
+        X: (n samples, width, height, channels) -- non-preprocessed PIL images in np format
         y: (n samples, )
         [to implement] class_id (dict): {0: classname0, 1: classname1, ...}
         """
@@ -72,6 +72,8 @@ class ActiveLearning:
         classes = sorted(dirs)  # ensure order
 
         for i, cls in enumerate(classes):
+            print(f"Loading class {i}: {cls}")
+
             cpath = os.path.join(path, cls)
             (_, _, filenames) = next(os.walk(cpath))
             filenames = sorted(filenames)
@@ -141,6 +143,13 @@ class ActiveLearning:
             X_pool = self.preprocess_input_fn(X_pool)
 
         return X_pool, self.y[idx_pool], idx_pool
+
+    def get_test(self, preprocess=True):
+        X_test = self.X_test
+        if preprocess:
+            X_test = self.preprocess_input_fn(X_test)
+
+        return X_test, self.y_test
 
     def add_to_training(self, idx):
         """Move a batch of labeled data from the unlabeled pool to the training
