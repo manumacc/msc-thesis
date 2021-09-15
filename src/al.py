@@ -128,7 +128,7 @@ class ActiveLearning:
 
         X_train = self.X[self.idx_train]
         if preprocess:
-            X_train = self.preprocess_input_fn(X_train)
+            X_train = self.preprocess_input_fn(np.copy(X_train))
 
         return X_train, self.y[self.idx_train]
 
@@ -140,14 +140,14 @@ class ActiveLearning:
 
         X_pool = self.X[idx_pool]
         if preprocess:
-            X_pool = self.preprocess_input_fn(X_pool)
+            X_pool = self.preprocess_input_fn(np.copy(X_pool))
 
         return X_pool, self.y[idx_pool], idx_pool
 
     def get_test(self, preprocess=True):
         X_test = self.X_test
         if preprocess:
-            X_test = self.preprocess_input_fn(X_test)
+            X_test = self.preprocess_input_fn(np.copy(X_test))
 
         return X_test, self.y_test
 
