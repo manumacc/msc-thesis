@@ -31,6 +31,9 @@ def VGG16(n_classes,
     )
 
     if not feature_extractor_trainable:
+        if not load_imagenet:
+            raise ValueError("Feature extractor must be trainable if randomly initialized")
+
         model_base.trainable = False
 
     x = model_base.output
