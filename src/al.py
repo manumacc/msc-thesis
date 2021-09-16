@@ -153,13 +153,13 @@ class ActiveLearning:
 
         self.idx_train = np.concatenate([self.idx_train, idx])
 
-    def query(self, X_pool, n_query_instances, seed=None):
+    def query(self, X_pool, n_query_instances, seed=None, **query_kwargs):
         """
         X_pool: pool data
         n_query_instances: how many instances to query from the pool
         """
 
-        return self.query_strategy(X_pool, n_query_instances, seed=seed)
+        return self.query_strategy(X_pool, n_query_instances, seed=seed, **query_kwargs)
 
     def teach(self, batch_size, n_epochs):
         """Trains and evaluates the model.
@@ -185,7 +185,7 @@ class ActiveLearning:
                                            batch_size=batch_size)
         self.logs["test"].append(test_metrics)
 
-    def learn(self, n_loops, n_query_instances, batch_size, n_epochs, seed=None):
+    def learn(self, n_loops, n_query_instances, batch_size, n_epochs, seed=None, **query_kwargs):
         """
         seed is applied to query call
         """
@@ -200,7 +200,7 @@ class ActiveLearning:
             print(f"Iteration #{i+1}")
 
             X_pool, y_pool, idx_pool = self.get_pool(get_indices=True)
-            idx_query = self.query(X_pool, n_query_instances, seed=seed)
+            idx_query = self.query(X_pool, n_query_instances, seed=seed, **query_kwargs)
             self.add_to_training(idx_pool[idx_query])
 
             self.teach(batch_size, n_epochs)
