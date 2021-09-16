@@ -5,9 +5,6 @@ import numpy as np
 
 from PIL import Image
 
-from tensorflow.keras.optimizers import SGD
-from tensorflow.keras.losses import CategoricalCrossentropy
-
 
 class ActiveLearning:
     def __init__(self,
@@ -41,7 +38,7 @@ class ActiveLearning:
 
         self.idx_train = self.initialize_dataset(init_size, seed=seed)
 
-        self.logs = []
+        self.logs = {"train": [], "test": []}
 
     def load_dataset(self, path, sample_size, seed=None):
         """
@@ -118,11 +115,6 @@ class ActiveLearning:
 
         return idx_init
 
-    def initialize_model(self):
-        """Train model on initial training set"""
-
-        pass
-
     def get_train(self, preprocess=True):
         """Get current training dataset"""
 
@@ -132,7 +124,7 @@ class ActiveLearning:
 
         return X_train, self.y[self.idx_train]
 
-    def get_pool(self, preprocess=True):
+    def get_pool(self, preprocess=True, get_indices=False):
         """Get current unlabeled pool"""
 
         idx = np.arange(0, self.X.shape[0])
@@ -142,7 +134,10 @@ class ActiveLearning:
         if preprocess:
             X_pool = self.preprocess_input_fn(np.copy(X_pool))
 
-        return X_pool, self.y[idx_pool], idx_pool
+        if get_indices:
+            return X_pool, self.y[idx_pool], idx_pool
+        else:
+            return X_pool, self.y[idx_pool]
 
     def get_test(self, preprocess=True):
         X_test = self.X_test
@@ -166,10 +161,31 @@ class ActiveLearning:
 
         return self.query_strategy(X_pool, n_query_instances, seed=seed)
 
-    def teach(self, X_train, y_train):
-        pass
+    def teach(self, batch_size, n_epochs):
+        """Trains and evaluates the model.
 
-    def learn(self, n_loops, n_query_instances, seed=None):
+        Args:
+            batch_size:
+            n_epochs:
+
+        Returns:
+
+        """
+
+        X_train, y_train = self.get_train()
+        history = self.model.fit(X_train, y_train,
+                                 validation_split=self.val_size,
+                                 batch_size=batch_size,
+                                 epochs=n_epochs,
+                                 shuffle=True)
+        self.logs["train"].append(history)
+
+        X_test, y_test = self.get_test()
+        test_metrics = self.model.evaluate(X_test, y_test,
+                                           batch_size=batch_size)
+        self.logs["test"].append(test_metrics)
+
+    def learn(self, n_loops, n_query_instances, batch_size, n_epochs, seed=None):
         """
         seed is applied to query call
         """
@@ -177,64 +193,17 @@ class ActiveLearning:
         print("Total dataset size:", len(self.X))
 
         # Initial training
-        # TODO: put everything inside self.initialize_model and the fit step
-        #  inside self.teach
-        # self.initialize_model()
-        lr_init = 0.01
-        momentum = 0.9
-        batch_size = 256
-        n_epochs = 2  # should be between 50-100, with early stopping when the
-        # validation set accuracy stops improving for the third time
-
-        loss_fn = CategoricalCrossentropy()
-
-        optimizer = SGD(learning_rate=lr_init, momentum=momentum)
-        self.model.compile(optimizer=optimizer,
-                           loss=loss_fn,
-                           metrics=["accuracy"])
-
-        X_train, y_train = self.get_train()
-
-        self.model.fit(X_train, y_train,
-                       validation_split=self.val_size,
-                       batch_size=batch_size,
-                       epochs=n_epochs,
-                       shuffle=True)
-
-        test_log = self.model.evaluate(self.X_test, self.y_test, batch_size=None)
-        self.logs.append(test_log)
+        self.teach(batch_size, n_epochs)
 
         # Active learning loop
         for i in range(n_loops):
-            print("AL STEP #", i+1)
+            print(f"Iteration #{i+1}")
 
-            X_pool, y_pool, idx_pool = self.get_pool()
-
-            print("shape of pool (pre query)", X_pool.shape, y_pool.shape)
-
-            # Query
+            X_pool, y_pool, idx_pool = self.get_pool(get_indices=True)
             idx_query = self.query(X_pool, n_query_instances, seed=seed)
             self.add_to_training(idx_pool[idx_query])
 
-            # Teach
-            # TODO: put this step inside self.teach
-            X_train, y_train = self.get_train()
-
-            self.model.fit(X_train, y_train,
-                           batch_size=batch_size,
-                           epochs=n_epochs,
-                           shuffle=True)
-
-            X_pool, y_pool, idx_pool = self.get_pool()  # DEBUG -- REMOVE THIS LINE!
-
-            print("shape of pool (post query)", X_pool.shape, y_pool.shape)
-            print("shape of train (post query)", X_train.shape, y_train.shape)
-
-            print("intersect pool & train (should be empty)", np.intersect1d(self.idx_train, idx_pool))
-
-            # Test
-            test_log = self.model.evaluate(self.X_test, self.y_test, batch_size=None)
-            self.logs.append(test_log)
+            self.teach(batch_size, n_epochs)
 
     @staticmethod
     def _load_img(path, grayscale=False, target_size=None):
