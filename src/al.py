@@ -18,10 +18,12 @@ class ActiveLearning:
                  class_sample_size_test,
                  init_size,
                  val_size,
-                 seed=None):
+                 seed=None,
+                 model_callbacks=None):
         self.query_strategy = query_strategy
 
         self.model = model
+        self.model_callbacks = model_callbacks
         self.preprocess_input_fn = preprocess_input_fn
         self.target_size = target_size
 
@@ -177,6 +179,7 @@ class ActiveLearning:
                                  validation_split=self.val_size,
                                  batch_size=batch_size,
                                  epochs=n_epochs,
+                                 callbacks=self.model_callbacks if self.model_callbacks else [],
                                  shuffle=True)
         self.logs["train"].append(history)
 
