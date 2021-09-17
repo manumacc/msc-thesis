@@ -4,9 +4,17 @@ from qs import QueryStrategy
 
 class LeastConfidentQueryStrategy(QueryStrategy):
     def __call__(self, X_pool, n_query_instances, seed=None, predict_batch_size=None):
-        """
-        Query the instances whose best labeling is the least confident,
-        according to the model outputs (softmax).
+        """Selects the instances whose best labeling is the least confident.
+
+        Confidence is measured as the prediction output after the softmax layer.
+
+        Args:
+            X_pool: Unlabeled pool from which to query instances
+            n_query_instances: Number of instances to query
+            seed: No effect
+
+        Returns:
+            idx_query: Indices of selected samples
         """
 
         preds = self.model.predict(X_pool,
