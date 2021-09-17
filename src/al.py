@@ -122,9 +122,16 @@ class ActiveLearning:
 
         X_train = self.X[self.idx_train]
         if preprocess:
-            X_train = self.preprocess_input_fn(np.copy(X_train))
+            X_train = self.preprocess_input_fn(X_train)
 
         return X_train, self.y[self.idx_train]
+
+    def get_test(self, preprocess=True):
+        X_test = self.X_test
+        if preprocess:
+            X_test = self.preprocess_input_fn(np.copy(X_test))
+
+        return X_test, self.y_test
 
     def get_pool(self, preprocess=True, get_indices=False):
         """Get current unlabeled pool"""
@@ -134,19 +141,12 @@ class ActiveLearning:
 
         X_pool = self.X[idx_pool]
         if preprocess:
-            X_pool = self.preprocess_input_fn(np.copy(X_pool))
+            X_pool = self.preprocess_input_fn(X_pool)
 
         if get_indices:
-            return X_pool, self.y[idx_pool], idx_pool
+            return X_pool, idx_pool
         else:
-            return X_pool, self.y[idx_pool]
-
-    def get_test(self, preprocess=True):
-        X_test = self.X_test
-        if preprocess:
-            X_test = self.preprocess_input_fn(np.copy(X_test))
-
-        return X_test, self.y_test
+            return X_pool
 
     def add_to_training(self, idx):
         """Move a batch of labeled data from the unlabeled pool to the training
@@ -163,50 +163,72 @@ class ActiveLearning:
 
         return self.query_strategy(X_pool, n_query_instances, seed=seed, **query_kwargs)
 
-    def teach(self, batch_size, n_epochs):
-        """Trains and evaluates the model.
-
-        Args:
-            batch_size:
-            n_epochs:
-
-        Returns:
-
-        """
-
-        X_train, y_train = self.get_train()
+    def model_fit(self, X_train, y_train, batch_size, n_epochs):
         history = self.model.fit(X_train, y_train,
                                  validation_split=self.val_size,
                                  batch_size=batch_size,
                                  epochs=n_epochs,
                                  callbacks=self.model_callbacks if self.model_callbacks else [],
                                  shuffle=True)
-        self.logs["train"].append(history)
+        return history
 
-        X_test, y_test = self.get_test()
+    def model_evaluate(self, X_test, y_test, batch_size):
         test_metrics = self.model.evaluate(X_test, y_test,
                                            batch_size=batch_size)
-        self.logs["test"].append(test_metrics)
+        return test_metrics
 
-    def learn(self, n_loops, n_query_instances, batch_size, n_epochs, seed=None, **query_kwargs):
-        """
-        seed is applied to query call
+    def learn(self,
+              n_loops,
+              n_query_instances,
+              batch_size,
+              n_epochs,
+              seed=None,
+              require_raw_pool=False,
+              **query_kwargs):
+        """Runs active learning loops.
+
+        Args:
+            n_loops: Number of active learning loops
+            n_query_instances: Number of instances to query at each iteration
+            batch_size: Batch size for model fit and evaluation
+            n_epochs: Number of epochs for model fit
+            seed: Reproducibility for query strategy
+            require_raw_pool: If True, also extract unprocessed unlabeled pool
+                and pass it to query strategy
+            **query_kwargs: Query strategy kwargs
         """
 
         print("Total dataset size:", len(self.X))
 
-        # Initial training
-        self.teach(batch_size, n_epochs)
+        X_train, y_train = self.get_train()
+        history = self.model_fit(X_train, y_train, batch_size, n_epochs)
+        self.logs["train"].append(history)
+        del X_train, y_train
+
+        X_test, y_test = self.get_test()  # Reusable at every iteration
+        test_metrics = self.model_evaluate(X_test, y_test, batch_size)
+        self.logs["test"].append(test_metrics)
 
         # Active learning loop
-        for i in range(n_loops):
+        for i in range(n_loops+1):
             print(f"Iteration #{i+1}")
 
-            X_pool, y_pool, idx_pool = self.get_pool(get_indices=True)
-            idx_query = self.query(X_pool, n_query_instances, seed=seed, **query_kwargs)
+            X_pool, idx_pool = self.get_pool(get_indices=True)
+            if require_raw_pool:
+                X_pool_raw = self.get_pool(preprocess=False)
+                idx_query = self.query(X_pool, n_query_instances, seed=seed, X_pool_raw=X_pool_raw, **query_kwargs)
+            else:
+                idx_query = self.query(X_pool, n_query_instances, seed=seed, **query_kwargs)
+
             self.add_to_training(idx_pool[idx_query])
 
-            self.teach(batch_size, n_epochs)
+            X_train, y_train = self.get_train()
+            history = self.model_fit(X_train, y_train, batch_size, n_epochs)
+            self.logs["train"].append(history)
+            del X_train, y_train
+
+            test_metrics = self.model_evaluate(X_test, y_test, batch_size)
+            self.logs["test"].append(test_metrics)
 
     @staticmethod
     def _load_img(path, grayscale=False, target_size=None):
