@@ -2,6 +2,7 @@ import os
 import random
 
 import numpy as np
+import tensorflow as tf
 
 from PIL import Image
 
@@ -38,7 +39,7 @@ class ActiveLearning:
 
         self.classes = classes_train
 
-        self.idx_train = self.initialize_dataset(init_size, seed=seed)
+        self.idx_train = self.initialize_dataset(seed=seed)
 
         self.logs = {"train": [], "test": []}
 
@@ -101,37 +102,71 @@ class ActiveLearning:
 
         return X, y, classes
 
-    def initialize_dataset(self, init_size, seed=None):
-        """Create initial training set and unlabeled pool.
+    def initialize_dataset(self, seed=None):
+        """Randomly select indices for the initial training set.
 
         The initial training set is used to train a baseline model.
-
-        init_size: initial training set size
-        val_size: validation set size
         """
 
         rng = np.random.default_rng(seed)
 
-        idx = np.arange(0, self.X.shape[0])
-        idx_init = rng.choice(idx, size=int(len(idx) * init_size), replace=False)
+        idx_init = rng.choice(np.arange(0, len(self.X)),
+                              size=int(len(self.X) * self.init_size),
+                              replace=False)
 
         return idx_init
 
-    def get_train(self, preprocess=True):
-        """Get current training dataset"""
+    def get_train(self, batch_size, preprocess=True, seed=None):
+        """Get current training dataset along with the validation set."""
 
-        X_train = self.X[self.idx_train]
+        rng = np.random.default_rng(seed)
+
+        idx_val_subset = rng.choice(np.arange(0, len(self.idx_train)),
+                                    size=int(len(self.idx_train) * self.val_size),
+                                    replace=False)
+
+        idx_val = self.idx_train[idx_val_subset]
+        idx_train = np.delete(self.idx_train, idx_val_subset)
+
+        X_train_t = tf.convert_to_tensor(self.X[idx_train])
+        y_train_t = tf.convert_to_tensor(self.y[idx_train])
+
+        X_val_t = tf.convert_to_tensor(self.X[idx_val])
+        y_val_t = tf.convert_to_tensor(self.y[idx_val])
+
         if preprocess:
-            X_train = self.preprocess_input_fn(X_train)
+            X_train_t = self.preprocess_input_fn(X_train_t)
+            X_val_t = self.preprocess_input_fn(X_val_t)
 
-        return X_train, self.y[self.idx_train]
+        ds_train = tf.data.Dataset.from_tensor_slices((X_train_t, y_train_t))
+        ds_train = self._prepare_dataset(ds_train, batch_size)
 
-    def get_test(self, preprocess=True):
-        X_test = self.X_test
+        ds_val = tf.data.Dataset.from_tensor_slices((X_val_t, y_val_t))
+        ds_val = self._prepare_dataset(ds_val, batch_size)
+
+        return ds_train, ds_val
+
+    def get_test(self, batch_size, preprocess=True):
+        """Get test dataset"""
+
+        X_test_t = tf.convert_to_tensor(self.X_test)
+        y_test_t = tf.convert_to_tensor(self.y_test)
         if preprocess:
-            X_test = self.preprocess_input_fn(np.copy(X_test))
+            X_test_t = self.preprocess_input_fn(X_test_t)
 
-        return X_test, self.y_test
+        ds_test = tf.data.Dataset.from_tensor_slices((X_test_t, y_test_t))
+        ds_test = self._prepare_dataset(ds_test, batch_size)
+
+        return ds_test
+
+    @staticmethod
+    def _prepare_dataset(ds, batch_size, buffer_size=1000):
+        ds = ds.cache()
+        ds = ds.shuffle(buffer_size=1000)
+        ds = ds.batch(batch_size)
+        ds = ds.prefetch(tf.data.experimental.AUTOTUNE)
+
+        return ds
 
     def get_pool(self, preprocess=True, get_indices=False):
         """Get current unlabeled pool"""
@@ -163,18 +198,15 @@ class ActiveLearning:
 
         return self.query_strategy(X_pool, n_query_instances, seed=seed, **query_kwargs)
 
-    def model_fit(self, X_train, y_train, batch_size, n_epochs):
-        history = self.model.fit(X_train, y_train,
-                                 validation_split=self.val_size,
-                                 batch_size=batch_size,
+    def model_fit(self, ds_train, ds_val, n_epochs):
+        history = self.model.fit(ds_train,
+                                 validation_data=ds_val,
                                  epochs=n_epochs,
-                                 callbacks=self.model_callbacks if self.model_callbacks else [],
-                                 shuffle=True)
+                                 callbacks=self.model_callbacks if self.model_callbacks else [])
         return history
 
-    def model_evaluate(self, X_test, y_test, batch_size):
-        test_metrics = self.model.evaluate(X_test, y_test,
-                                           batch_size=batch_size)
+    def model_evaluate(self, ds_test):
+        test_metrics = self.model.evaluate(ds_test)
         return test_metrics
 
     def learn(self,
@@ -200,13 +232,13 @@ class ActiveLearning:
 
         print("Total dataset size:", len(self.X))
 
-        X_train, y_train = self.get_train()
-        history = self.model_fit(X_train, y_train, batch_size, n_epochs)
+        ds_train, ds_val = self.get_train(batch_size)
+        history = self.model_fit(ds_train, ds_val, n_epochs)
         self.logs["train"].append(history)
-        del X_train, y_train
+        del ds_train, ds_val
 
-        X_test, y_test = self.get_test()  # Reusable at every iteration
-        test_metrics = self.model_evaluate(X_test, y_test, batch_size)
+        ds_test = self.get_test(batch_size)  # Reusable at every iteration
+        test_metrics = self.model_evaluate(ds_test)
         self.logs["test"].append(test_metrics)
 
         # Active learning loop
@@ -219,12 +251,12 @@ class ActiveLearning:
             self.add_to_training(idx_pool[idx_query])
             del X_pool, idx_pool
 
-            X_train, y_train = self.get_train()
-            history = self.model_fit(X_train, y_train, batch_size, n_epochs)
+            ds_train, ds_val = self.get_train(batch_size)
+            history = self.model_fit(ds_train, ds_val, n_epochs)
             self.logs["train"].append(history)
-            del X_train, y_train
+            del ds_train, ds_val
 
-            test_metrics = self.model_evaluate(X_test, y_test, batch_size)
+            test_metrics = self.model_evaluate(ds_test)
             self.logs["test"].append(test_metrics)
 
     @staticmethod
