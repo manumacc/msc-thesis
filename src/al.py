@@ -213,13 +213,9 @@ class ActiveLearning:
         for i in range(n_loops):
             print(f"Iteration #{i+1}")
 
-            X_pool, idx_pool = self.get_pool(get_indices=True)
-            if require_raw_pool:
-                X_pool_raw = self.get_pool(preprocess=False)
-                idx_query = self.query(X_pool, n_query_instances, seed=seed, X_pool_raw=X_pool_raw, **query_kwargs)
-            else:
-                idx_query = self.query(X_pool, n_query_instances, seed=seed, **query_kwargs)
-
+            X_pool, idx_pool = self.get_pool(preprocess=False if require_raw_pool else True,
+                                             get_indices=True)
+            idx_query = self.query(X_pool, n_query_instances, seed=seed, **query_kwargs)
             self.add_to_training(idx_pool[idx_query])
 
             X_train, y_train = self.get_train()
