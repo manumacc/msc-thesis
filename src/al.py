@@ -217,6 +217,7 @@ class ActiveLearning:
                                              get_indices=True)
             idx_query = self.query(X_pool, n_query_instances, seed=seed, **query_kwargs)
             self.add_to_training(idx_pool[idx_query])
+            del X_pool, idx_pool
 
             X_train, y_train = self.get_train()
             history = self.model_fit(X_train, y_train, batch_size, n_epochs)
