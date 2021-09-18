@@ -210,7 +210,7 @@ class ActiveLearning:
         self.logs["test"].append(test_metrics)
 
         # Active learning loop
-        for i in range(n_loops+1):
+        for i in range(n_loops):
             print(f"Iteration #{i+1}")
 
             X_pool, idx_pool = self.get_pool(get_indices=True)
