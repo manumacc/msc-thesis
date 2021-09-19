@@ -14,6 +14,7 @@ class ActiveLearning:
                  query_strategy,
                  model,
                  preprocess_input_fn,
+                 batch_size,
                  target_size,
                  class_sample_size_train,
                  class_sample_size_test,
@@ -26,13 +27,14 @@ class ActiveLearning:
         self.model = model
         self.model_callbacks = model_callbacks
         self.preprocess_input_fn = preprocess_input_fn
+        self.batch_size = batch_size
         self.target_size = target_size
 
         self.init_size = init_size
         self.val_size = val_size
 
         self.X, self.y, classes_train = self.load_dataset(path_train, class_sample_size_train, seed=seed)
-        self.X_test, self.y_test, classes_test = self.load_dataset(path_test, class_sample_size_test, seed=seed)
+        self.ds_test, classes_test = self.load_dataset(path_test, class_sample_size_test, as_tf_dataset=True, seed=seed)
 
         if classes_train != classes_test:
             raise ValueError("Train and test classes differ")
@@ -43,7 +45,7 @@ class ActiveLearning:
 
         self.logs = {"train": [], "test": []}
 
-    def load_dataset(self, path, sample_size, seed=None):
+    def load_dataset(self, path, sample_size, as_tf_dataset=False, seed=None):
         """
         Load an image dataset into a numpy array X along with target classes in y
 
@@ -100,7 +102,14 @@ class ActiveLearning:
         X, y = np.concatenate(X), np.concatenate(y)
         y = self._one_hot_encode(y)
 
-        return X, y, classes
+        if as_tf_dataset:
+            X = self.preprocess_input_fn(tf.convert_to_tensor(X))
+            y = tf.convert_to_tensor(y)
+            ds = tf.data.Dataset.from_tensor_slices((X, y))
+            ds = self._prepare_dataset(ds, self.batch_size)
+            return ds, classes
+        else:
+            return X, y, classes
 
     def initialize_dataset(self, seed=None):
         """Randomly select indices for the initial training set.
@@ -116,7 +125,7 @@ class ActiveLearning:
 
         return idx_init
 
-    def get_train(self, batch_size, preprocess=True, seed=None):
+    def get_train(self, preprocess=True, seed=None):
         """Get current training dataset along with the validation set."""
 
         rng = np.random.default_rng(seed)
@@ -139,30 +148,17 @@ class ActiveLearning:
             X_val_t = self.preprocess_input_fn(X_val_t)
 
         ds_train = tf.data.Dataset.from_tensor_slices((X_train_t, y_train_t))
-        ds_train = self._prepare_dataset(ds_train, batch_size)
+        ds_train = self._prepare_dataset(ds_train, self.batch_size)
 
         ds_val = tf.data.Dataset.from_tensor_slices((X_val_t, y_val_t))
-        ds_val = self._prepare_dataset(ds_val, batch_size)
+        ds_val = self._prepare_dataset(ds_val, self.batch_size)
 
         return ds_train, ds_val
-
-    def get_test(self, batch_size, preprocess=True):
-        """Get test dataset"""
-
-        X_test_t = tf.convert_to_tensor(self.X_test)
-        y_test_t = tf.convert_to_tensor(self.y_test)
-        if preprocess:
-            X_test_t = self.preprocess_input_fn(X_test_t)
-
-        ds_test = tf.data.Dataset.from_tensor_slices((X_test_t, y_test_t))
-        ds_test = self._prepare_dataset(ds_test, batch_size)
-
-        return ds_test
 
     @staticmethod
     def _prepare_dataset(ds, batch_size, buffer_size=1000):
         ds = ds.cache()
-        ds = ds.shuffle(buffer_size=1000)
+        ds = ds.shuffle(buffer_size=buffer_size)
         ds = ds.batch(batch_size)
         ds = ds.prefetch(tf.data.experimental.AUTOTUNE)
 
@@ -212,7 +208,6 @@ class ActiveLearning:
     def learn(self,
               n_loops,
               n_query_instances,
-              batch_size,
               n_epochs,
               seed=None,
               require_raw_pool=False,
@@ -232,31 +227,29 @@ class ActiveLearning:
 
         print("Total dataset size:", len(self.X))
 
-        ds_train, ds_val = self.get_train(batch_size)
-        history = self.model_fit(ds_train, ds_val, n_epochs)
-        self.logs["train"].append(history)
-        del ds_train, ds_val
-
-        ds_test = self.get_test(batch_size)  # Reusable at every iteration
-        test_metrics = self.model_evaluate(ds_test)
-        self.logs["test"].append(test_metrics)
-
         # Active learning loop
-        for i in range(n_loops):
-            print(f"Iteration #{i+1}")
+        for i in range(n_loops+1):
+            print(f"Iteration #{i}")
 
-            X_pool, idx_pool = self.get_pool(preprocess=False if require_raw_pool else True,
-                                             get_indices=True)
-            idx_query = self.query(X_pool, n_query_instances, seed=seed, **query_kwargs)
-            self.add_to_training(idx_pool[idx_query])
-            del X_pool, idx_pool
+            if i > 0:
+                print("Fetching pool")
+                X_pool, idx_pool = self.get_pool(preprocess=False if require_raw_pool else True,
+                                                 get_indices=True)
+                print("Querying")
+                idx_query = self.query(X_pool, n_query_instances, seed=seed, **query_kwargs)
+                print(f"Queried {len(idx_query)} samples")
+                self.add_to_training(idx_pool[idx_query])
+                del X_pool, idx_pool
 
-            ds_train, ds_val = self.get_train(batch_size)
+            print("Fetching training dataset")
+            ds_train, ds_val = self.get_train()
+            print("Fitting model")
             history = self.model_fit(ds_train, ds_val, n_epochs)
             self.logs["train"].append(history)
             del ds_train, ds_val
 
-            test_metrics = self.model_evaluate(ds_test)
+            print("Evaluating model")
+            test_metrics = self.model_evaluate(self.ds_test)
             self.logs["test"].append(test_metrics)
 
     @staticmethod
