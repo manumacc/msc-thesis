@@ -24,7 +24,7 @@ class Experiment:
         if self.config["model"] == "VGG16":
             from network.vgg16 import VGG16
             model = VGG16(n_classes=self.config["n_classes"],
-                          dropout_rate=self.config["dropout_rate"],
+                          dropout_rate=self.config["fc_dropout_rate"],
                           dense_units=self.config["dense_units"],
                           load_imagenet=self.config["load_imagenet_weights"],
                           feature_extractor_trainable=self.config["feature_extractor_trainable"])
