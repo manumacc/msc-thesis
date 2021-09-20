@@ -1,6 +1,13 @@
-import config
+import argparse
 
+import config
 from src.experiment import Experiment
 
+arg_parser = argparse.ArgumentParser(description="Run active learning loop")
+arg_parser.add_argument("name", type=str, help="name of the experiment")
+
 if __name__ == '__main__':
-    pass
+    args = arg_parser.parse_args()
+
+    experiment = Experiment(config.config_dict)
+    experiment.run(args.name)

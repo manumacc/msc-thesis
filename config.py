@@ -1,46 +1,48 @@
-# Seed
-SEED = 42
+config_dict = {
+    # Seed
+    "seed": 42,
 
-# Dataset
-DATA_PATH_TRAIN = "data/imagenette2/train"
-DATA_PATH_TEST = "data/imagenette2/val"
+    # Dataset
+    "data_path_train": "data/imagenette2/train",
+    "data_path_test": "data/imagenette2/val",
 
-N_CLASSES = 10
+    "n_classes": 10,
 
-CLASS_SAMPLE_SIZE_TRAIN = 800
-CLASS_SAMPLE_SIZE_TEST = 300
+    "class_sample_size_train": 800,
+    "class_sample_size_test": 300,
 
-# Model
-MODEL = "VGG16"
+    # Model
+    "model": "VGG16",
 
-FC_DROPOUT_RATE = 0.5
-DENSE_UNITS = 4096
-LOAD_IMAGENET_WEIGHTS = False
-FEATURE_EXTRACTOR_TRAINABLE = True
+    "fc_dropout_rate": 0.5,
+    "dense_units": 4096,
+    "load_imagenet_weights": False,
+    "feature_extractor_trainable": True,
 
-# Learning
-OPTIMIZER = "SGDW"
+    # Learning
+    "optimizer": "SGDW",
 
-LR_INIT = 1e-2
-MOMENTUM = 0.9
-WEIGHT_DECAY = 5e-4
+    "lr_init": 1e-2,
+    "momentum": 0.9,
+    "weight_decay": 5e-4,
 
-BATCH_SIZE = 64
-N_EPOCHS = 50
+    "batch_size": 64,  # VGG16 paper: 256
+    "n_epochs": 50,
 
-LOSS = "categorical_crossentropy"
+    "loss": "categorical_crossentropy",
 
-CALLBACKS = [
-    "learning_rate_decay_with_early_stopping"
-]
+    "callbacks": [
+        "learning_rate_decay_early_stopping"
+    ],
 
-# Active learning
-N_LOOPS = 10
+    # Active learning
+    "n_loops": 10,
 
-INIT_SIZE = 0.2
-VAL_SIZE = 0.1  # With respect to current training set
+    "init_size": 0.2,
+    "val_size": 0.1,  # With respect to current training set
 
-QUERY_STRATEGY = "random"
-REQUIRE_RAW_POOL = False
+    "query_strategy": "random",
+    "require_raw_pool": False,
 
-N_QUERY_INSTANCES = 64  # Number of instances to add at each iteration
+    "n_query_instances": 64,  # Number of instances to add at each iteration
+}
