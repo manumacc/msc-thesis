@@ -245,7 +245,7 @@ class ActiveLearning:
             ds_train, ds_val = self.get_train()
             print("Fitting model")
             history = self.model_fit(ds_train, ds_val, n_epochs)
-            self.logs["train"].append(history)
+            self.logs["train"].append(history.history)
             del ds_train, ds_val
 
             print("Evaluating model")
