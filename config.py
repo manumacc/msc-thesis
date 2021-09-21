@@ -26,7 +26,7 @@ config_dict = {
     "momentum": 0.9,
     "weight_decay": 5e-4,
 
-    "batch_size": 64,  # VGG16 paper: 256
+    "model_batch_size": 64,  # VGG16 paper: 256
     "n_epochs": 1,
 
     "loss": "categorical_crossentropy",
@@ -45,4 +45,5 @@ config_dict = {
     "require_raw_pool": False,
 
     "n_query_instances": 64,  # Number of instances to add at each iteration
+    "query_batch_size": 64,  # Batch size for unlabeled pool iterator
 }

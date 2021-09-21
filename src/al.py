@@ -12,9 +12,10 @@ class ActiveLearning:
                  path_train,
                  path_test,
                  query_strategy,
+                 query_batch_size,
                  model,
                  preprocess_input_fn,
-                 batch_size,
+                 model_batch_size,
                  target_size,
                  class_sample_size_train,
                  class_sample_size_test,
@@ -23,11 +24,12 @@ class ActiveLearning:
                  seed=None,
                  model_callbacks=None):
         self.query_strategy = query_strategy
+        self.query_batch_size = query_batch_size
 
         self.model = model
         self.model_callbacks = model_callbacks
         self.preprocess_input_fn = preprocess_input_fn
-        self.batch_size = batch_size
+        self.model_batch_size = model_batch_size
         self.target_size = target_size
 
         self.init_size = init_size
@@ -106,7 +108,7 @@ class ActiveLearning:
             X = self.preprocess_input_fn(tf.convert_to_tensor(X))
             y = tf.convert_to_tensor(y)
             ds = tf.data.Dataset.from_tensor_slices((X, y))
-            ds = self._prepare_dataset(ds, self.batch_size)
+            ds = self._prepare_dataset(ds, self.model_batch_size)
             return ds, classes
         else:
             return X, y, classes
@@ -148,10 +150,10 @@ class ActiveLearning:
             X_val_t = self.preprocess_input_fn(X_val_t)
 
         ds_train = tf.data.Dataset.from_tensor_slices((X_train_t, y_train_t))
-        ds_train = self._prepare_dataset(ds_train, self.batch_size)
+        ds_train = self._prepare_dataset(ds_train, self.model_batch_size)
 
         ds_val = tf.data.Dataset.from_tensor_slices((X_val_t, y_val_t))
-        ds_val = self._prepare_dataset(ds_val, self.batch_size)
+        ds_val = self._prepare_dataset(ds_val, self.model_batch_size)
 
         return ds_train, ds_val
 
@@ -217,7 +219,6 @@ class ActiveLearning:
         Args:
             n_loops: Number of active learning loops
             n_query_instances: Number of instances to query at each iteration
-            batch_size: Batch size for model fit and evaluation
             n_epochs: Number of epochs for model fit
             seed: Reproducibility for query strategy
             require_raw_pool: If True, also extract unprocessed unlabeled pool
