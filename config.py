@@ -32,8 +32,11 @@ config_dict = {
     "loss": "categorical_crossentropy",
 
     "callbacks": [
-        "learning_rate_decay_early_stopping"
+        "decay_early_stopping"
     ],
+
+    "decay_early_stopping_patience": 5,
+    "decay_early_stopping_times": 3,
 
     # Active learning
     "n_loops": 10,

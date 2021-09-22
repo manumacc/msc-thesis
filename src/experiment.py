@@ -44,10 +44,10 @@ class Experiment:
                                             weight_decay=self.config["weight_decay"])
 
         callbacks = []
-        if "learning_rate_decay_early_stopping" in self.config["callbacks"]:
+        if "decay_early_stopping" in self.config["callbacks"]:
             from callbacks.learning_rate_decay_early_stopping import LearningRateDecayEarlyStopping
-            callback = LearningRateDecayEarlyStopping(patience=3,
-                                                      n_decay=3,
+            callback = LearningRateDecayEarlyStopping(patience=self.config["decay_early_stopping_patience"],
+                                                      n_decay=self.config["decay_early_stopping_times"],
                                                       verbose=1)
             callbacks.append(callback)
 
