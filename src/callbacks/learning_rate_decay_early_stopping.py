@@ -16,6 +16,7 @@ class LearningRateDecayEarlyStopping(Callback):
                  min_delta=0,
                  patience=0,
                  n_decay=0,
+                 restore_best_weights=True,
                  verbose=1):
         super(LearningRateDecayEarlyStopping, self).__init__()
 
@@ -34,12 +35,16 @@ class LearningRateDecayEarlyStopping(Callback):
 
         self.monitor_op = np.less
 
+        self.restore_best_weights = restore_best_weights
+        self.best_weights = None
+
     def on_train_begin(self, logs=None):
         # Allow instances to be re-used
         self.wait = 0
         self.stopped_epoch = 0
         self.current_decay_level = 0
         self.best = np.Inf
+        self.best_weights = None
 
     def on_epoch_end(self, epoch, logs=None):
         if not hasattr(self.model.optimizer, 'lr'):
@@ -49,10 +54,16 @@ class LearningRateDecayEarlyStopping(Callback):
         if current is None:
             return
 
+        if self.restore_best_weights and self.best_weights is None:
+            # Restore the weights after first epoch if no progress is ever made.
+            self.best_weights = self.model.get_weights()
+
         self.wait += 1
 
         if self._is_improvement(current, self.best):
             self.best = current
+            if self.restore_best_weights:
+                self.best_weights = self.model.get_weights()
             self.wait = 0
 
         if self.wait >= self.patience and epoch > 0:  # Only check after the first epoch
@@ -67,6 +78,11 @@ class LearningRateDecayEarlyStopping(Callback):
                 backend.set_value(self.model.optimizer.lr, backend.get_value(lr))
                 if self.verbose > 0:
                     print('Epoch %05d: learning rate decayed' % (epoch + 1))
+
+            if self.restore_best_weights and self.best_weights is not None:
+                if self.verbose > 0:
+                    print('Restoring model weights from the end of the best epoch.')
+                self.model.set_weights(self.best_weights)
 
         logs['lr'] = backend.get_value(self.model.optimizer.lr)
 
