@@ -247,6 +247,8 @@ class ActiveLearning:
                 self.reset_model_weights()
 
             X_train, y_train = self.get_train(preprocess=True)
+            print("(debug) Composition of current training set:")
+            print(np.unique(self._one_hot_decode(y_train), return_counts=True))
             print("Fitting model")
             history = self.model.fit(X_train, y_train,
                                      validation_split=self.val_size,
@@ -325,3 +327,12 @@ class ActiveLearning:
         y_one_hot[np.arange(y.size), y] = 1
 
         return y_one_hot
+
+    @staticmethod
+    def _one_hot_decode(y_one_hot):
+        if y_one_hot.ndim != 2:
+            raise ValueError(f"Unsupported shape: {y_one_hot.shape}")
+
+        y = np.argmax(y_one_hot, axis=1)
+
+        return y
