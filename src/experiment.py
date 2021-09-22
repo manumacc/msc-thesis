@@ -68,7 +68,11 @@ class Experiment:
                 "query_batch_size": self.config["query_batch_size"],
             }
         elif self.config["query_strategy"] == "margin-sampling":
-            raise NotImplementedError
+            from query.margin_sampling import MarginSamplingQueryStrategy
+            query_strategy = MarginSamplingQueryStrategy(model)
+            query_kwargs = {
+                "query_batch_size": self.config["query_batch_size"],
+            }
         elif self.config["query_strategy"] == "entropy":
             raise NotImplementedError
 
