@@ -61,7 +61,7 @@ class Experiment:
         if self.config["query_strategy"] == "random":
             from query.random import RandomQueryStrategy
             query_strategy = RandomQueryStrategy(model)
-        elif self.config["query_strategy"] == "least_confident":
+        elif self.config["query_strategy"] == "least-confident":
             from query.least_confident import LeastConfidentQueryStrategy
             query_strategy = LeastConfidentQueryStrategy(model)
             query_kwargs = {

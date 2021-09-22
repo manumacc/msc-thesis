@@ -3,7 +3,7 @@ import numpy as np
 from qs import QueryStrategy
 
 class LeastConfidentQueryStrategy(QueryStrategy):
-    def __call__(self, X_pool, n_query_instances, seed=None, query_batch_size=None):
+    def __call__(self, X_pool, metadata, n_query_instances, seed=None, query_batch_size=None):
         """Selects the instances whose best labeling is the least confident.
 
         Confidence is measured as the prediction output after the softmax layer.
