@@ -57,19 +57,26 @@ class Experiment:
 
         # Query strategy
         query_strategy = None
+        query_kwargs = {}
         if self.config["query_strategy"] == "random":
             from query.random import RandomQueryStrategy
             query_strategy = RandomQueryStrategy(model)
         elif self.config["query_strategy"] == "least_confident":
             from query.least_confident import LeastConfidentQueryStrategy
             query_strategy = LeastConfidentQueryStrategy(model)
+            query_kwargs = {
+                "query_batch_size": self.config["query_batch_size"],
+            }
+        elif self.config["query_strategy"] == "margin-sampling":
+            raise NotImplementedError
+        elif self.config["query_strategy"] == "entropy":
+            raise NotImplementedError
 
         # Active learning loop
         al_loop = al.ActiveLearning(
             path_train=self.config["data_path_train"],
             path_test=self.config["data_path_test"],
             query_strategy=query_strategy,
-            query_batch_size=self.config["query_batch_size"],
             model=model,
             preprocess_input_fn=preprocess_fn,
             model_batch_size=self.config["model_batch_size"],
@@ -79,7 +86,7 @@ class Experiment:
             init_size=self.config["init_size"],
             val_size=self.config["val_size"],
             seed=self.config["seed"],
-            model_callbacks=callbacks
+            model_callbacks=callbacks,
         )
 
         al_loop.learn(
@@ -87,7 +94,8 @@ class Experiment:
             n_query_instances=self.config["n_query_instances"],
             n_epochs=self.config["n_epochs"],
             seed=self.config["seed"],
-            require_raw_pool=self.config["require_raw_pool"]
+            require_raw_pool=self.config["require_raw_pool"],
+            **query_kwargs,
         )
 
         end = default_timer()

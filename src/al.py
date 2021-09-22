@@ -12,7 +12,6 @@ class ActiveLearning:
                  path_train,
                  path_test,
                  query_strategy,
-                 query_batch_size,
                  model,
                  preprocess_input_fn,
                  model_batch_size,
@@ -24,7 +23,6 @@ class ActiveLearning:
                  seed=None,
                  model_callbacks=None):
         self.query_strategy = query_strategy
-        self.query_batch_size = query_batch_size
 
         self.model = model
         self.model_initial_weights = model.get_weights()
@@ -162,7 +160,6 @@ class ActiveLearning:
         if get_metadata:
             metadata = {
                 "len": len(X_pool),
-                "batch_size": self.query_batch_size,
                 "is_raw": False if preprocess else True,
             }
             return X_pool, metadata
