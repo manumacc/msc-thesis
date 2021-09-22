@@ -112,7 +112,7 @@ class ActiveLearning:
         # Training set and unlabeled pool
         X, y, cls_train = self.load_data_from_directory(path_train, class_sample_size_train, seed=seed)
 
-        self._joint_shuffle(X, y)
+        self._joint_shuffle(X, y, seed=seed)
 
         init_bound = int(len(X) * self.init_size)
         X_train_init, y_train_init = X[:init_bound], y[:init_bound]
@@ -265,12 +265,12 @@ class ActiveLearning:
             self.logs["test"].append(test_metrics)
 
     @staticmethod
-    def _joint_shuffle(a, b):
+    def _joint_shuffle(a, b, seed=None):
         """Jointly shuffles two ndarrays in-place."""
-        state = np.random.get_state()
-        np.random.shuffle(a)
-        np.random.set_state(state)
-        np.random.shuffle(b)
+        rng = np.random.default_rng(seed)
+        rng.shuffle(a)
+        rng = np.random.default_rng(seed)
+        rng.shuffle(b)
 
     @staticmethod
     def _load_img(path, grayscale=False, target_size=None):
