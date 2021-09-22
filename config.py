@@ -8,8 +8,8 @@ config_dict = {
 
     "n_classes": 10,
 
-    "class_sample_size_train": 800,
-    "class_sample_size_test": 300,
+    "class_sample_size_train": 500,  # imagenette limit: 800
+    "class_sample_size_test": 100,  # imagenette limit: 300
 
     # Model
     "model": "VGG16",
@@ -27,7 +27,7 @@ config_dict = {
     "weight_decay": 5e-4,
 
     "model_batch_size": 64,  # VGG16 paper: 256
-    "n_epochs": 1,
+    "n_epochs": 30,
 
     "loss": "categorical_crossentropy",
 
@@ -44,6 +44,6 @@ config_dict = {
     "query_strategy": "random",
     "require_raw_pool": False,
 
-    "n_query_instances": 64,  # Number of instances to add at each iteration
+    "n_query_instances": 256,  # Number of instances to add at each iteration
     "query_batch_size": 64,  # Batch size for unlabeled pool iterator
 }

@@ -17,11 +17,13 @@ class LeastConfidentQueryStrategy(QueryStrategy):
             idx_query: Indices of selected samples
         """
 
-        preds = self.model.predict(X_pool,
-                                   batch_size=predict_batch_size,
-                                   verbose=1)
+        # preds = self.model.predict(X_pool,
+        #                            batch_size=predict_batch_size,
+        #                            verbose=1)
+        #
+        # max_preds = preds.max(axis=1)
+        # idx_query = np.argsort(max_preds)[:n_query_instances]
+        #
+        # return idx_query
 
-        max_preds = preds.max(axis=1)
-        idx_query = np.argsort(max_preds)[:n_query_instances]
-
-        return idx_query
+        raise NotImplementedError
