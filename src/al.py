@@ -27,6 +27,7 @@ class ActiveLearning:
         self.query_batch_size = query_batch_size
 
         self.model = model
+        self.model_initial_weights = model.get_weights()
         self.model_callbacks = model_callbacks
         self.preprocess_input_fn = preprocess_input_fn
         self.model_batch_size = model_batch_size
@@ -205,6 +206,9 @@ class ActiveLearning:
 
         return self.query_strategy(X_pool, metadata, n_query_instances, seed=seed, **query_kwargs)
 
+    def reset_model_weights(self):
+        self.model.set_weights(self.model_initial_weights)
+
     def learn(self,
               n_loops,
               n_query_instances,
@@ -241,6 +245,9 @@ class ActiveLearning:
                 self.add_to_train(idx_query)
                 print("Deleting pool")
                 del X_pool, idx_query
+
+                print("Resetting model initial weights")
+                self.reset_model_weights()
 
             X_train, y_train = self.get_train(preprocess=True)
             print("Fitting model")
