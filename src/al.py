@@ -140,6 +140,10 @@ class ActiveLearning:
         y_train = np.concatenate([self.y_train_init, self.y_pool[self.idx_queried]])
         print(f"Shape of current train: {X_train.shape} labels {y_train.shape}")
 
+        print("Shuffling training dataset")
+        # This is required due to model.fit validation_split behaviour
+        self._joint_shuffle(X_train, y_train)
+
         if preprocess:
             print("Preprocessing X_train")
             X_train = self._prepare_dataset(X_train)
