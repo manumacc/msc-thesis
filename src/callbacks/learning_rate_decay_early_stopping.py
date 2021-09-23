@@ -16,7 +16,7 @@ class LearningRateDecayEarlyStopping(Callback):
                  min_delta=0,
                  patience=0,
                  n_decay=0,
-                 restore_best_weights=True,
+                 restore_best_weights=False,
                  verbose=1):
         super(LearningRateDecayEarlyStopping, self).__init__()
 
