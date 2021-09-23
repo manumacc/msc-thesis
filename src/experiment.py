@@ -78,7 +78,11 @@ class Experiment:
                 "query_batch_size": self.config["query_batch_size"],
             }
         elif self.config["query_strategy"] == "entropy":
-            raise NotImplementedError
+            from query.entropy import EntropyQueryStrategy
+            query_strategy = EntropyQueryStrategy(model)
+            query_kwargs = {
+                "query_batch_size": self.config["query_batch_size"],
+            }
 
         # Active learning loop
         al_loop = al.ActiveLearning(
