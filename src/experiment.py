@@ -37,6 +37,9 @@ class Experiment:
 
             target_size = (224, 224)
 
+        print("MODEL:")
+        print(model.summary())
+
         loss_fn = None
         if self.config["loss"] == "categorical_crossentropy":
             loss_fn = tf.keras.losses.CategoricalCrossentropy()

@@ -153,6 +153,7 @@ class ActiveLearning:
 
         print("Getting current pool (may cause OOM)")
         X_pool = np.delete(self.X_pool, self.idx_queried, axis=0)
+        idx_pool = np.delete(np.arange(0, len(self.X_pool)), self.idx_queried)
         print(f"Size of current pool: {X_pool.shape}")
 
         if preprocess:
@@ -164,9 +165,10 @@ class ActiveLearning:
                 "len": len(X_pool),
                 "is_raw": False if preprocess else True,
             }
-            return X_pool, metadata
+
+            return X_pool, idx_pool, metadata
         else:
-            return X_pool
+            return X_pool, idx_pool
 
     def get_test(self, preprocess=True):
         if preprocess:
@@ -238,12 +240,12 @@ class ActiveLearning:
             print(f"* Iteration #{i}")
 
             if i > 0:
-                X_pool, metadata = self.get_pool(preprocess=False if require_raw_pool else True,
-                                                 get_metadata=True)
+                X_pool, idx_pool, metadata = self.get_pool(preprocess=False if require_raw_pool else True,
+                                                           get_metadata=True)
                 print("Querying")
                 idx_query = self.query(X_pool, metadata, n_query_instances, seed=seed, **query_kwargs)
                 print(f"Queried {len(idx_query)} samples.")
-                self.add_to_train(idx_query)
+                self.add_to_train(idx_pool[idx_query])
                 print("Deleting pool")
                 del X_pool, idx_query
 
@@ -270,7 +272,7 @@ class ActiveLearning:
             self.logs["test"].append(test_metrics)
 
     @staticmethod
-    def _joint_shuffle(a, b, seed=1):
+    def _joint_shuffle(a, b, seed=42):
         """Jointly shuffles two ndarrays in-place."""
         rng = np.random.default_rng(seed)
         rng.shuffle(a)
