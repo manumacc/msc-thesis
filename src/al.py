@@ -14,7 +14,6 @@ class ActiveLearning:
                  query_strategy,
                  model,
                  preprocess_input_fn,
-                 model_batch_size,
                  target_size,
                  class_sample_size_train,
                  class_sample_size_test,
@@ -28,7 +27,6 @@ class ActiveLearning:
         self.model_initial_weights = model.get_weights()
         self.model_callbacks = model_callbacks
         self.preprocess_input_fn = preprocess_input_fn
-        self.model_batch_size = model_batch_size
         self.target_size = target_size
 
         self.init_size = init_size
@@ -213,6 +211,7 @@ class ActiveLearning:
     def learn(self,
               n_loops,
               n_query_instances,
+              batch_size,
               n_epochs,
               seed=None,
               require_raw_pool=False,
@@ -222,6 +221,7 @@ class ActiveLearning:
         Args:
             n_loops: Number of active learning loops
             n_query_instances: Number of instances to query at each iteration
+            batch_size: Batch size for model fit and evaluation
             n_epochs: Number of epochs for model fit
             seed: Reproducibility for query strategy
             require_raw_pool: If True, also extract unprocessed unlabeled pool
@@ -256,6 +256,7 @@ class ActiveLearning:
             print("Fitting model")
             history = self.model.fit(X_train, y_train,
                                      validation_split=self.val_size,
+                                     batch_size=batch_size,
                                      epochs=n_epochs,
                                      shuffle=True,
                                      callbacks=self.model_callbacks if self.model_callbacks else [])
@@ -265,7 +266,7 @@ class ActiveLearning:
 
             print("Evaluating model")
             test_metrics = self.model.evaluate(X_test, y_test,
-                                               batch_size=self.model_batch_size)
+                                               batch_size=batch_size)
             self.logs["test"].append(test_metrics)
 
     @staticmethod

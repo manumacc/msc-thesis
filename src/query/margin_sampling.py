@@ -23,7 +23,7 @@ class MarginSamplingQueryStrategy(QueryStrategy):
 
         preds = self.model.predict(X_pool,
                                    batch_size=query_batch_size,
-                                   verbose=1)
+                                   verbose=1)  # (len(X_pool), n_classes)
 
         preds_sorted = np.sort(preds, axis=-1)[..., ::-1]  # Sort each prediction vector (descending)
         margins = preds_sorted[..., 0] - preds_sorted[..., 1]  # Subtract the largest predictions from the second-largest

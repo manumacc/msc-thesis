@@ -14,6 +14,9 @@ class Experiment:
         self.config = config
 
     def run(self, name):
+        print("CONFIGURATION:")
+        print(self.config)
+
         start = default_timer()
         start_dt = datetime.datetime.now()
 
@@ -83,7 +86,6 @@ class Experiment:
             query_strategy=query_strategy,
             model=model,
             preprocess_input_fn=preprocess_fn,
-            model_batch_size=self.config["model_batch_size"],
             target_size=target_size,
             class_sample_size_train=self.config["class_sample_size_train"],
             class_sample_size_test=self.config["class_sample_size_test"],
@@ -96,6 +98,7 @@ class Experiment:
         al_loop.learn(
             n_loops=self.config["n_loops"],
             n_query_instances=self.config["n_query_instances"],
+            batch_size=self.config["batch_size"],
             n_epochs=self.config["n_epochs"],
             seed=self.config["seed"],
             require_raw_pool=self.config["require_raw_pool"],

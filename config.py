@@ -26,7 +26,7 @@ config_dict = {
     "momentum": 0.9,
     "weight_decay": 5e-4,
 
-    "model_batch_size": 64,  # VGG16 paper: 256
+    "batch_size": 64,  # VGG16 paper: 256
     "n_epochs": 40,
 
     "loss": "categorical_crossentropy",
