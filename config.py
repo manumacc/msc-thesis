@@ -35,7 +35,7 @@ config_dict = {
         "decay_early_stopping"
     ],
 
-    "decay_early_stopping_patience": 5,
+    "decay_early_stopping_patience": 3,
     "decay_early_stopping_times": 3,
 
     # Active learning

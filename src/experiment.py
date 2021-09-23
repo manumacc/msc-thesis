@@ -15,7 +15,8 @@ class Experiment:
 
     def run(self, name):
         print("CONFIGURATION:")
-        print(self.config)
+        for k, v in self.config.items():
+            print(f"- {k} = {v}")
 
         start = default_timer()
         start_dt = datetime.datetime.now()
