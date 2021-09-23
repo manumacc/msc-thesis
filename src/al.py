@@ -270,7 +270,7 @@ class ActiveLearning:
             self.logs["test"].append(test_metrics)
 
     @staticmethod
-    def _joint_shuffle(a, b, seed=None):
+    def _joint_shuffle(a, b, seed=1):
         """Jointly shuffles two ndarrays in-place."""
         rng = np.random.default_rng(seed)
         rng.shuffle(a)
