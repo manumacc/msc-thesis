@@ -128,9 +128,9 @@ class Experiment:
         end = default_timer()
 
         if self.config["save_logs"]:
-            with open(pathlib.Path(path_logs, "config.pkl"), "w") as f:
+            with open(pathlib.Path(path_logs, "config.pkl"), "wb") as f:
                 pickle.dump(self.config, f)
-            with open(pathlib.Path(path_logs, "al_logs.pkl"), "w") as f:
+            with open(pathlib.Path(path_logs, "al_logs.pkl"), "wb") as f:
                 pickle.dump(al_loop.al_logs, f)
             with open(pathlib.Path(path_logs, "stats.txt"), "w") as f:
                 f.write(f"Elapsed time (s): {end - start}")

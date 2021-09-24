@@ -254,7 +254,6 @@ class ActiveLearning:
             print("Composition of current training set:")
             print(np.unique(self._one_hot_decode(y_train), return_counts=True))
             print("Fitting model")
-            print("Optimizer config:", self.current_model.optimizer.get_config())
             history = self.current_model.fit(X_train, y_train,
                                              validation_split=self.val_size,
                                              batch_size=batch_size,
