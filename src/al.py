@@ -1,4 +1,5 @@
 import os
+import pathlib
 import random
 
 import numpy as np
@@ -19,7 +20,9 @@ class ActiveLearning:
                  init_size,
                  val_size,
                  seed=None,
-                 model_callbacks=None):
+                 model_callbacks=None,
+                 path_logs=None,
+                 save_models=False):
         self.query_strategy = query_strategy
 
         self.current_model = None
@@ -38,7 +41,13 @@ class ActiveLearning:
 
         self.idx_queried = np.array([], dtype=int)
 
-        self.logs = {"train": [], "test": []}
+        if path_logs:
+            self.save_logs = True
+            self.save_models = save_models
+            self.path_logs = path_logs
+            self.al_logs = {"train": [], "test": []}
+        else:
+            self.save_logs = False
 
     def load_data_from_directory(self, path, sample_size, seed=None):
         """
@@ -195,18 +204,7 @@ class ActiveLearning:
         print(f"Total amount of queried samples post-query: {len(self.idx_queried)}")
 
     def query(self, X_pool, metadata, n_query_instances, model, seed=None, **query_kwargs):
-        """
-
-        Args:
-            X_pool:
-            metadata:
-            n_query_instances: number of instances to select from the pool
-            seed:
-            **query_kwargs:
-
-        Returns:
-
-        """
+        """Call to query strategy function"""
 
         return self.query_strategy(X_pool, metadata, n_query_instances, model, seed=seed, **query_kwargs)
 
@@ -253,23 +251,30 @@ class ActiveLearning:
                 del X_pool, idx_query
 
             X_train, y_train = self.get_train(preprocess=True)
-            print("(debug) Composition of current training set:")
+            print("Composition of current training set:")
             print(np.unique(self._one_hot_decode(y_train), return_counts=True))
             print("Fitting model")
+            print("Optimizer config:", self.current_model.optimizer.get_config())
             history = self.current_model.fit(X_train, y_train,
                                              validation_split=self.val_size,
                                              batch_size=batch_size,
                                              epochs=n_epochs,
                                              shuffle=True,
                                              callbacks=self.model_callbacks)
-            self.logs["train"].append(history.history)
+            if self.save_logs:
+                self.al_logs["train"].append(history.history)
+                print("Saving model")
+                self.current_model.save(pathlib.Path(self.path_logs, f"model_iter_{i}"))
+
             print("Deleting training set")
             del X_train, y_train
 
             print("Evaluating model")
             test_metrics = self.current_model.evaluate(X_test, y_test,
                                                        batch_size=batch_size)
-            self.logs["test"].append(test_metrics)
+
+            if self.save_logs:
+                self.al_logs["test"].append(test_metrics)
 
     @staticmethod
     def _joint_shuffle(a, b, seed=42):

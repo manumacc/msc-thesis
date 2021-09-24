@@ -1,4 +1,8 @@
 config_dict = {
+    # Logging
+    "save_logs": True,
+    "save_models": True,
+
     # Seed
     "seed": 42,
 

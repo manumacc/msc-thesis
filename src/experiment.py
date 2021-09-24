@@ -1,4 +1,4 @@
-import os
+import pathlib
 import datetime
 import pickle
 
@@ -92,6 +92,12 @@ class Experiment:
             }
 
         # Active learning loop
+        if self.config["save_logs"]:
+            path_logs = pathlib.Path("logs", f"{name}_{start_dt.strftime('%Y%m%d_%H%M%S')}")
+            path_logs.mkdir(parents=True, exist_ok=False)
+        else:
+            path_logs = None
+
         al_loop = al.ActiveLearning(
             path_train=self.config["data_path_train"],
             path_test=self.config["data_path_test"],
@@ -105,6 +111,8 @@ class Experiment:
             val_size=self.config["val_size"],
             seed=self.config["seed"],
             model_callbacks=callbacks,
+            path_logs=path_logs,
+            save_models=self.config["save_models"]
         )
 
         al_loop.learn(
@@ -119,15 +127,10 @@ class Experiment:
 
         end = default_timer()
 
-        # TODO: better logging, redirect stdout to file via python
-        #  see https://stackoverflow.com/questions/4675728/redirect-stdout-to-a-file-in-python
-        logs = {
-            "config": self.config,
-            "al": al_loop.logs,
-            "elapsed_s": end - start
-        }
-
-        log_path = "logs"
-        fname = f"LOGS_{name}_{start_dt.strftime('%Y%m%d_%H%M%S')}.pkl"
-        with open(os.path.join(log_path, fname), "wb") as f:
-            pickle.dump(logs, f)
+        if self.config["save_logs"]:
+            with open(pathlib.Path(path_logs, "config.pkl"), "w") as f:
+                pickle.dump(self.config, f)
+            with open(pathlib.Path(path_logs, "al_logs.pkl"), "w") as f:
+                pickle.dump(al_loop.al_logs, f)
+            with open(pathlib.Path(path_logs, "stats.txt"), "w") as f:
+                f.write(f"Elapsed time (s): {end - start}")
