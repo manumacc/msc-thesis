@@ -22,41 +22,33 @@ class Experiment:
         start_dt = datetime.datetime.now()
 
         # Model build
-        def model_init():
-            model = None
-            if self.config["model"] == "VGG16":
-                from network.vgg16 import VGG16
-                print("Instantiating VGG16 model")
-                model = VGG16(n_classes=self.config["n_classes"],
-                              dropout_rate=self.config["fc_dropout_rate"],
-                              dense_units=self.config["dense_units"],
-                              load_imagenet=self.config["load_imagenet_weights"],
-                              feature_extractor_trainable=self.config["feature_extractor_trainable"])
-
-            loss_fn = None
-            if self.config["loss"] == "categorical_crossentropy":
-                loss_fn = tf.keras.losses.CategoricalCrossentropy()
-
-            optimizer = None
-            if self.config["optimizer"] == "SGDW":
-                optimizer = tfa.optimizers.SGDW(learning_rate=self.config["lr_init"],
-                                                momentum=self.config["momentum"],
-                                                weight_decay=self.config["weight_decay"])
-
-            print("Compiling model")
-            model.compile(optimizer=optimizer,
-                          loss=loss_fn,
-                          metrics=["accuracy"])
-
-            return model
-
-        model_initialization_fn = model_init
-
+        model = None
         preprocess_fn = None
         target_size = None
         if self.config["model"] == "VGG16":
+            from network.vgg16 import VGG16
+            model = VGG16(n_classes=self.config["n_classes"],
+                          dropout_rate=self.config["fc_dropout_rate"],
+                          dense_units=self.config["dense_units"],
+                          load_imagenet=self.config["load_imagenet_weights"],
+                          feature_extractor_trainable=self.config["feature_extractor_trainable"])
+
             preprocess_fn = tf.keras.applications.vgg16.preprocess_input
+
             target_size = (224, 224)
+
+        print("MODEL:")
+        print(model.summary())
+
+        loss_fn = None
+        if self.config["loss"] == "categorical_crossentropy":
+            loss_fn = tf.keras.losses.CategoricalCrossentropy()
+
+        optimizer = None
+        if self.config["optimizer"] == "SGDW":
+            optimizer = tfa.optimizers.SGDW(learning_rate=self.config["lr_init"],
+                                            momentum=self.config["momentum"],
+                                            weight_decay=self.config["weight_decay"])
 
         callbacks = []
         if "decay_early_stopping" in self.config["callbacks"]:
@@ -66,27 +58,31 @@ class Experiment:
                                                       verbose=1)
             callbacks.append(callback)
 
+        model.compile(optimizer=optimizer,
+                      loss=loss_fn,
+                      metrics=["accuracy"])
+
         # Query strategy
         query_strategy = None
         query_kwargs = {}
         if self.config["query_strategy"] == "random":
             from query.random import RandomQueryStrategy
-            query_strategy = RandomQueryStrategy()
+            query_strategy = RandomQueryStrategy(model)
         elif self.config["query_strategy"] == "least-confident":
             from query.least_confident import LeastConfidentQueryStrategy
-            query_strategy = LeastConfidentQueryStrategy()
+            query_strategy = LeastConfidentQueryStrategy(model)
             query_kwargs = {
                 "query_batch_size": self.config["query_batch_size"],
             }
         elif self.config["query_strategy"] == "margin-sampling":
             from query.margin_sampling import MarginSamplingQueryStrategy
-            query_strategy = MarginSamplingQueryStrategy()
+            query_strategy = MarginSamplingQueryStrategy(model)
             query_kwargs = {
                 "query_batch_size": self.config["query_batch_size"],
             }
         elif self.config["query_strategy"] == "entropy":
             from query.entropy import EntropyQueryStrategy
-            query_strategy = EntropyQueryStrategy()
+            query_strategy = EntropyQueryStrategy(model)
             query_kwargs = {
                 "query_batch_size": self.config["query_batch_size"],
             }
@@ -96,7 +92,7 @@ class Experiment:
             path_train=self.config["data_path_train"],
             path_test=self.config["data_path_test"],
             query_strategy=query_strategy,
-            model_initialization_fn=model_initialization_fn,
+            model=model,
             preprocess_input_fn=preprocess_fn,
             target_size=target_size,
             class_sample_size_train=self.config["class_sample_size_train"],
