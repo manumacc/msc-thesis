@@ -12,8 +12,8 @@ config_dict = {
 
     "n_classes": 10,
 
-    "class_sample_size_train": 500,  # imagenette limit: 800
-    "class_sample_size_test": 100,  # imagenette limit: 300
+    "class_sample_size_train": 800,  # imagenette limit: 800
+    "class_sample_size_test": 300,  # imagenette limit: 300
 
     # Model
     "model": "VGG16",
@@ -30,7 +30,7 @@ config_dict = {
     "momentum": 0.9,
     "weight_decay": 5e-4,
 
-    "batch_size": 64,  # VGG16 paper: 256
+    "batch_size": 128,  # VGG16 paper: 256
     "n_epochs": 40,
 
     "loss": "categorical_crossentropy",
@@ -39,7 +39,7 @@ config_dict = {
         "decay_early_stopping"
     ],
 
-    "decay_early_stopping_patience": 3,
+    "decay_early_stopping_patience": 5,
     "decay_early_stopping_times": 3,
 
     # Active learning
@@ -52,5 +52,5 @@ config_dict = {
     "require_raw_pool": False,
 
     "n_query_instances": 256,  # Number of instances to add at each iteration
-    "query_batch_size": 64,  # Batch size for unlabeled pool iterator
+    "query_batch_size": 128,  # Batch size for unlabeled pool iterator
 }
