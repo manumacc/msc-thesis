@@ -2,7 +2,6 @@ import os
 import random
 
 import numpy as np
-import tensorflow as tf
 
 from PIL import Image
 
@@ -12,7 +11,7 @@ class ActiveLearning:
                  path_train,
                  path_test,
                  query_strategy,
-                 model,
+                 model_initialization_fn,
                  preprocess_input_fn,
                  target_size,
                  class_sample_size_train,
@@ -23,9 +22,10 @@ class ActiveLearning:
                  model_callbacks=None):
         self.query_strategy = query_strategy
 
-        self.model = model
-        self.model_initial_weights = model.get_weights()
-        self.model_callbacks = model_callbacks
+        self.current_model = None
+        self.model_initialization_fn = model_initialization_fn
+        self.model_callbacks = model_callbacks if model_callbacks else []
+
         self.preprocess_input_fn = preprocess_input_fn
         self.target_size = target_size
 
@@ -129,6 +129,9 @@ class ActiveLearning:
 
         return X_train_init, y_train_init, X_pool, y_pool, X_test, y_test, cls_train
 
+    def initialize_model(self):
+        self.current_model = self.model_initialization_fn()
+
     def get_train(self, preprocess=True):
         """Get current training dataset along with the validation set."""
 
@@ -191,7 +194,7 @@ class ActiveLearning:
         self.idx_queried = np.concatenate([self.idx_queried, idx])
         print(f"Total amount of queried samples post-query: {len(self.idx_queried)}")
 
-    def query(self, X_pool, metadata, n_query_instances, seed=None, **query_kwargs):
+    def query(self, X_pool, metadata, n_query_instances, model, seed=None, **query_kwargs):
         """
 
         Args:
@@ -205,10 +208,7 @@ class ActiveLearning:
 
         """
 
-        return self.query_strategy(X_pool, metadata, n_query_instances, seed=seed, **query_kwargs)
-
-    def reset_model_weights(self):
-        self.model.set_weights(self.model_initial_weights)
+        return self.query_strategy(X_pool, metadata, n_query_instances, model, seed=seed, **query_kwargs)
 
     def learn(self,
               n_loops,
@@ -239,36 +239,36 @@ class ActiveLearning:
         for i in range(n_loops+1):
             print(f"* Iteration #{i}")
 
+            print("Initializing new model")
+            self.initialize_model()
+
             if i > 0:
                 X_pool, idx_pool, metadata = self.get_pool(preprocess=False if require_raw_pool else True,
                                                            get_metadata=True)
                 print("Querying")
-                idx_query = self.query(X_pool, metadata, n_query_instances, seed=seed, **query_kwargs)
+                idx_query = self.query(X_pool, metadata, n_query_instances, self.current_model, seed=seed, **query_kwargs)
                 print(f"Queried {len(idx_query)} samples.")
                 self.add_to_train(idx_pool[idx_query])
                 print("Deleting pool")
                 del X_pool, idx_query
 
-                print("Resetting model initial weights")
-                self.reset_model_weights()
-
             X_train, y_train = self.get_train(preprocess=True)
             print("(debug) Composition of current training set:")
             print(np.unique(self._one_hot_decode(y_train), return_counts=True))
             print("Fitting model")
-            history = self.model.fit(X_train, y_train,
-                                     validation_split=self.val_size,
-                                     batch_size=batch_size,
-                                     epochs=n_epochs,
-                                     shuffle=True,
-                                     callbacks=self.model_callbacks if self.model_callbacks else [])
+            history = self.current_model.fit(X_train, y_train,
+                                             validation_split=self.val_size,
+                                             batch_size=batch_size,
+                                             epochs=n_epochs,
+                                             shuffle=True,
+                                             callbacks=self.model_callbacks)
             self.logs["train"].append(history.history)
             print("Deleting training set")
             del X_train, y_train
 
             print("Evaluating model")
-            test_metrics = self.model.evaluate(X_test, y_test,
-                                               batch_size=batch_size)
+            test_metrics = self.current_model.evaluate(X_test, y_test,
+                                                       batch_size=batch_size)
             self.logs["test"].append(test_metrics)
 
     @staticmethod
