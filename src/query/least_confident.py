@@ -17,6 +17,8 @@ class LeastConfidentQueryStrategy(QueryStrategy):
             idx_query: Indices of selected samples
         """
 
+        X_pool = self.preprocess_input_fn(X_pool)
+
         preds = model.predict(X_pool,
                               batch_size=query_batch_size,
                               verbose=1)

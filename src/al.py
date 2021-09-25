@@ -214,7 +214,6 @@ class ActiveLearning:
               batch_size,
               n_epochs,
               seed=None,
-              require_raw_pool=False,
               **query_kwargs):
         """Runs active learning loops.
 
@@ -241,8 +240,7 @@ class ActiveLearning:
             self.initialize_model()
 
             if i > 0:
-                X_pool, idx_pool, metadata = self.get_pool(preprocess=False if require_raw_pool else True,
-                                                           get_metadata=True)
+                X_pool, idx_pool, metadata = self.get_pool(preprocess=False, get_metadata=True)
                 print("Querying")
                 idx_query = self.query(X_pool, metadata, n_query_instances, self.current_model, seed=seed, **query_kwargs)
                 print(f"Queried {len(idx_query)} samples.")

@@ -1,12 +1,12 @@
 config_dict = {
-    # Logging
+    ## Logging
     "save_logs": True,
     "save_models": True,
 
-    # Seed
+    ## Seed
     "seed": 42,
 
-    # Dataset
+    ## Dataset
     "data_path_train": "data/imagenette2/train",
     "data_path_test": "data/imagenette2/val",
 
@@ -15,7 +15,7 @@ config_dict = {
     "class_sample_size_train": 800,  # imagenette limit: 800
     "class_sample_size_test": 300,  # imagenette limit: 300
 
-    # Model
+    ## Model
     "model": "VGG16",
 
     "fc_dropout_rate": 0.5,
@@ -23,7 +23,7 @@ config_dict = {
     "load_imagenet_weights": False,
     "feature_extractor_trainable": True,
 
-    # Learning
+    ## Learning
     "optimizer": "SGDW",
 
     "lr_init": 1e-2,
@@ -42,15 +42,14 @@ config_dict = {
     "decay_early_stopping_patience": 5,
     "decay_early_stopping_times": 3,
 
-    # Active learning
+    ## Active learning
     "n_loops": 10,
 
     "init_size": 0.2,
     "val_size": 0.1,  # With respect to current training set
 
-    "query_strategy": "random",
-    "require_raw_pool": False,
-
     "n_query_instances": 256,  # Number of instances to add at each iteration
+
+    ## Query strategy arguments
     "query_batch_size": 128,  # Batch size for unlabeled pool iterator
 }

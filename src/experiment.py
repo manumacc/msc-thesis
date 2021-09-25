@@ -13,7 +13,10 @@ class Experiment:
     def __init__(self, config):
         self.config = config
 
-    def run(self, name):
+    def run(self, name, query_strategy):
+        self.config["name"] = name
+        self.config["query_strategy"] = query_strategy
+
         print("CONFIGURATION:")
         for k, v in self.config.items():
             print(f"- {k} = {v}")
@@ -71,22 +74,22 @@ class Experiment:
         query_kwargs = {}
         if self.config["query_strategy"] == "random":
             from query.random import RandomQueryStrategy
-            query_strategy = RandomQueryStrategy()
+            query_strategy = RandomQueryStrategy(preprocess_input_fn=preprocess_fn)
         elif self.config["query_strategy"] == "least-confident":
             from query.least_confident import LeastConfidentQueryStrategy
-            query_strategy = LeastConfidentQueryStrategy()
+            query_strategy = LeastConfidentQueryStrategy(preprocess_input_fn=preprocess_fn)
             query_kwargs = {
                 "query_batch_size": self.config["query_batch_size"],
             }
         elif self.config["query_strategy"] == "margin-sampling":
             from query.margin_sampling import MarginSamplingQueryStrategy
-            query_strategy = MarginSamplingQueryStrategy()
+            query_strategy = MarginSamplingQueryStrategy(preprocess_input_fn=preprocess_fn)
             query_kwargs = {
                 "query_batch_size": self.config["query_batch_size"],
             }
         elif self.config["query_strategy"] == "entropy":
             from query.entropy import EntropyQueryStrategy
-            query_strategy = EntropyQueryStrategy()
+            query_strategy = EntropyQueryStrategy(preprocess_input_fn=preprocess_fn)
             query_kwargs = {
                 "query_batch_size": self.config["query_batch_size"],
             }
