@@ -74,7 +74,7 @@ class Experiment:
         query_kwargs = {}
         if self.config["query_strategy"] == "random":
             from query.random import RandomQueryStrategy
-            query_strategy = RandomQueryStrategy(preprocess_input_fn=preprocess_fn)
+            query_strategy = RandomQueryStrategy()
         elif self.config["query_strategy"] == "least-confident":
             from query.least_confident import LeastConfidentQueryStrategy
             query_strategy = LeastConfidentQueryStrategy(preprocess_input_fn=preprocess_fn)
@@ -124,7 +124,6 @@ class Experiment:
             batch_size=self.config["batch_size"],
             n_epochs=self.config["n_epochs"],
             seed=self.config["seed"],
-            require_raw_pool=self.config["require_raw_pool"],
             **query_kwargs,
         )
 
