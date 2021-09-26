@@ -1,13 +1,11 @@
-from tensorflow.keras import layers
+from tensorflow.keras import layers, initializers
 from tensorflow.keras import Model
-from tensorflow.keras.applications import vgg16
 
 def VGG16(n_classes,
           input_shape=(224, 224, 3),
           dropout_rate=0.5,
           dense_units=4096,
-          load_imagenet=True,
-          feature_extractor_trainable=False):
+          seed=None):
     """VGG16 model for training and inference, based on the original paper.
 
     Args:
@@ -15,40 +13,82 @@ def VGG16(n_classes,
         input_shape: Shape of the input.
         dropout_rate: Rate of dropout for fully connected dropout layers.
         dense_units: Number of units of fully connected layers.
-        load_imagenet: If True, load imagenet weights for the feature extractor.
-            Note that the dense classifier block is always randomly initialized.
-        feature_extractor_trainable: If False, freeze the feature extractor
-            layers. Otherwise, set them to trainable layers.
+        seed: Seed for kernel initializer
 
     Returns:
         model: VGG16 model with classifier.
     """
 
-    model_base = vgg16.VGG16(
-        include_top=False,
-        weights='imagenet' if load_imagenet else None,
-        input_shape=input_shape
-    )
+    x_input = layers.Input(shape=input_shape)
 
-    if not feature_extractor_trainable:
-        if not load_imagenet:
-            raise ValueError("Feature extractor must be trainable if randomly initialized")
+    # Convolutional block 1
+    x = layers.Conv2D(64, (3, 3),
+                      activation='relu', padding='same', name='block1_conv1',
+                      kernel_initializer=initializers.GlorotUniform(seed=seed+1 if seed else None))(x_input)
+    x = layers.Conv2D(64, (3, 3),
+                      activation='relu', padding='same', name='block1_conv2',
+                      kernel_initializer=initializers.GlorotUniform(seed=seed+2 if seed else None))(x)
+    x = layers.MaxPooling2D((2, 2), strides=(2, 2), name='block1_pool')(x)
 
-        model_base.trainable = False
+    # Convolutional block 2
+    x = layers.Conv2D(128, (3, 3),
+                      activation='relu', padding='same', name='block2_conv1',
+                      kernel_initializer=initializers.GlorotUniform(seed=seed+1 if seed else None))(x)
+    x = layers.Conv2D(128, (3, 3),
+                      activation='relu', padding='same', name='block2_conv2',
+                      kernel_initializer=initializers.GlorotUniform(seed=seed+2 if seed else None))(x)
+    x = layers.MaxPooling2D((2, 2), strides=(2, 2), name='block2_pool')(x)
 
-    x = model_base.output
+    # Convolutional block 3
+    x = layers.Conv2D(256, (3, 3),
+                      activation='relu', padding='same', name='block3_conv1',
+                      kernel_initializer=initializers.GlorotUniform(seed=seed+1 if seed else None))(x)
+    x = layers.Conv2D(256, (3, 3),
+                      activation='relu', padding='same', name='block3_conv2',
+                      kernel_initializer=initializers.GlorotUniform(seed=seed+2 if seed else None))(x)
+    x = layers.Conv2D(256, (3, 3),
+                      activation='relu', padding='same', name='block3_conv3',
+                      kernel_initializer=initializers.GlorotUniform(seed=seed+3 if seed else None))(x)
+    x = layers.MaxPooling2D((2, 2), strides=(2, 2), name='block3_pool')(x)
+
+    # Convolutional block 4
+    x = layers.Conv2D(512, (3, 3),
+                      activation='relu', padding='same', name='block4_conv1',
+                      kernel_initializer=initializers.GlorotUniform(seed=seed+1 if seed else None))(x)
+    x = layers.Conv2D(512, (3, 3),
+                      activation='relu', padding='same', name='block4_conv2',
+                      kernel_initializer=initializers.GlorotUniform(seed=seed+2 if seed else None))(x)
+    x = layers.Conv2D(512, (3, 3),
+                      activation='relu', padding='same', name='block4_conv3',
+                      kernel_initializer=initializers.GlorotUniform(seed=seed+3 if seed else None))(x)
+    x = layers.MaxPooling2D((2, 2), strides=(2, 2), name='block4_pool')(x)
+
+    # Convolutional block 5
+    x = layers.Conv2D(512, (3, 3),
+                      activation='relu', padding='same', name='block5_conv1',
+                      kernel_initializer=initializers.GlorotUniform(seed=seed+1 if seed else None))(x)
+    x = layers.Conv2D(512, (3, 3),
+                      activation='relu', padding='same', name='block5_conv2',
+                      kernel_initializer=initializers.GlorotUniform(seed=seed+2 if seed else None))(x)
+    x = layers.Conv2D(512, (3, 3),
+                      activation='relu', padding='same', name='block5_conv3',
+                      kernel_initializer=initializers.GlorotUniform(seed=seed+3 if seed else None))(x)
+    x = layers.MaxPooling2D((2, 2), strides=(2, 2), name='block5_pool')(x)
 
     # Dense block
     x = layers.Flatten(name='flatten')(x)
 
-    x = layers.Dense(dense_units, activation='relu', name='fc1')(x)
+    x = layers.Dense(dense_units, activation='relu', name='fc1',
+                     kernel_initializer=initializers.GlorotUniform(seed=seed+1 if seed else None))(x)
     x = layers.Dropout(dropout_rate, name='fc1_dropout')(x)
-    x = layers.Dense(dense_units, activation='relu', name='fc2')(x)
+    x = layers.Dense(dense_units, activation='relu', name='fc2',
+                     kernel_initializer=initializers.GlorotUniform(seed=seed+2 if seed else None))(x)
     x = layers.Dropout(dropout_rate, name='fc2_dropout')(x)
 
-    output = layers.Dense(n_classes, activation='softmax', name='predictions')(x)
+    x_output = layers.Dense(n_classes, activation='softmax', name='predictions',
+                                kernel_initializer=initializers.GlorotUniform(seed=seed+3 if seed else None))(x)
 
     # Model definition
-    model = Model(inputs=model_base.input, outputs=output, name='vgg16')
+    model = Model(inputs=x_input, outputs=x_output, name='VGG16')
 
     return model

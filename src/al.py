@@ -26,7 +26,6 @@ class ActiveLearning:
         self.query_strategy = query_strategy
 
         self.current_model = None
-        self.weights_initial_model = None
         self.model_initialization_fn = model_initialization_fn
         self.model_callbacks = model_callbacks if model_callbacks else []
 
@@ -139,17 +138,10 @@ class ActiveLearning:
 
         return X_train_init, y_train_init, X_pool, y_pool, X_test, y_test, cls_train
 
-    def initialize_model(self):
-        if self.current_model is None:
-            self.current_model = self.model_initialization_fn()
-            print("Saving initial weights")
-            self.weights_initial_model = self.current_model.get_weights()
-        else:
-            self.current_model = self.model_initialization_fn()
-            print("Resetting first model initial weights")
-            self.current_model.set_weights(self.weights_initial_model)
+    def initialize_model(self, seed=None):
+        self.current_model = self.model_initialization_fn(seed=seed)
 
-    def get_train(self, preprocess=True):
+    def get_train(self, preprocess=True, seed=None):
         """Get current training dataset along with the validation set."""
 
         print("Getting current training")
@@ -160,7 +152,7 @@ class ActiveLearning:
 
         print("Shuffling training dataset")
         # This is required due to model.fit validation_split behaviour
-        self._joint_shuffle(X_train, y_train)
+        self._joint_shuffle(X_train, y_train, seed=seed)
 
         if preprocess:
             print("Preprocessing X_train")
@@ -232,8 +224,6 @@ class ActiveLearning:
             batch_size: Batch size for model fit and evaluation
             n_epochs: Number of epochs for model fit
             seed: Reproducibility for query strategy
-            require_raw_pool: If True, also extract unprocessed unlabeled pool
-                and pass it to query strategy
             **query_kwargs: Query strategy kwargs
         """
 
@@ -242,11 +232,11 @@ class ActiveLearning:
         X_test, y_test = self.get_test()
 
         # Active learning loop
-        for i in range(n_loops+1):
+        for i in range(n_loops + 1):
             print(f"* Iteration #{i}")
 
             print("Initializing new model")
-            self.initialize_model()
+            self.initialize_model(seed=seed)
 
             if i > 0:
                 X_pool, idx_pool, metadata = self.get_pool(preprocess=False, get_metadata=True)
@@ -257,7 +247,7 @@ class ActiveLearning:
                 print("Deleting pool")
                 del X_pool, idx_query
 
-            X_train, y_train = self.get_train(preprocess=True)
+            X_train, y_train = self.get_train(preprocess=True, seed=seed)
             print("Composition of current training set:")
             print(np.unique(self._one_hot_decode(y_train), return_counts=True))
             print("Fitting model")
@@ -269,6 +259,8 @@ class ActiveLearning:
                                              callbacks=self.model_callbacks)
             if self.save_logs:
                 self.al_logs["train"].append(history.history)
+
+            if self.save_models:
                 print("Saving model")
                 self.current_model.save(pathlib.Path(self.path_logs, f"model_iter_{i}"))
 
@@ -283,7 +275,7 @@ class ActiveLearning:
                 self.al_logs["test"].append(test_metrics)
 
     @staticmethod
-    def _joint_shuffle(a, b, seed=42):
+    def _joint_shuffle(a, b, seed=None):
         """Jointly shuffles two ndarrays in-place."""
         rng = np.random.default_rng(seed)
         rng.shuffle(a)
@@ -341,7 +333,7 @@ class ActiveLearning:
         if y.ndim != 1:
             raise ValueError(f"Unsupported shape: {y.shape}")
 
-        y_one_hot = np.zeros((y.size, y.max()+1))
+        y_one_hot = np.zeros((y.size, y.max() + 1))
         y_one_hot[np.arange(y.size), y] = 1
 
         return y_one_hot

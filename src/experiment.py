@@ -25,16 +25,15 @@ class Experiment:
         start_dt = datetime.datetime.now()
 
         # Model build
-        def model_init():
+        def model_init(seed=None):
             model = None
             if self.config["model"] == "VGG16":
                 from network.vgg16 import VGG16
-                print("Instantiating VGG16 model")
+                print(f"Instantiating VGG16 model with seed {seed}")
                 model = VGG16(n_classes=self.config["n_classes"],
                               dropout_rate=self.config["fc_dropout_rate"],
                               dense_units=self.config["dense_units"],
-                              load_imagenet=self.config["load_imagenet_weights"],
-                              feature_extractor_trainable=self.config["feature_extractor_trainable"])
+                              seed=seed)
 
             loss_fn = None
             if self.config["loss"] == "categorical_crossentropy":

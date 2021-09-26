@@ -20,8 +20,6 @@ config_dict = {
 
     "fc_dropout_rate": 0.5,
     "dense_units": 4096,
-    "load_imagenet_weights": False,
-    "feature_extractor_trainable": True,
 
     ## Learning
     "optimizer": "SGDW",
