@@ -4,7 +4,7 @@ config_dict = {
     "save_models": True,
 
     ## Seed
-    "seed": 42,
+    "seed": 123,
 
     ## Dataset
     "data_path_train": "data/imagenette2/train",
@@ -28,8 +28,8 @@ config_dict = {
     "momentum": 0.9,
     "weight_decay": 5e-4,
 
-    "batch_size": 128,  # VGG16 paper: 256
-    "n_epochs": 40,
+    "batch_size": 256,  # VGG16 paper: 256
+    "n_epochs": 50,
 
     "loss": "categorical_crossentropy",
 
@@ -43,11 +43,11 @@ config_dict = {
     ## Active learning
     "n_loops": 10,
 
-    "init_size": 0.2,
+    "init_size": 0.1,
     "val_size": 0.1,  # With respect to current training set
 
     "n_query_instances": 256,  # Number of instances to add at each iteration
 
     ## Query strategy arguments
-    "query_batch_size": 128,  # Batch size for unlabeled pool iterator
+    "query_batch_size": 256,  # Batch size for unlabeled pool iterator
 }
