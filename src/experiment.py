@@ -77,19 +77,19 @@ class Experiment:
             query_strategy = RandomQueryStrategy()
         elif self.config["query_strategy"] == "least-confident":
             from query.least_confident import LeastConfidentQueryStrategy
-            query_strategy = LeastConfidentQueryStrategy(preprocess_input_fn=preprocess_fn)
+            query_strategy = LeastConfidentQueryStrategy()
             query_kwargs = {
                 "query_batch_size": self.config["query_batch_size"],
             }
         elif self.config["query_strategy"] == "margin-sampling":
             from query.margin_sampling import MarginSamplingQueryStrategy
-            query_strategy = MarginSamplingQueryStrategy(preprocess_input_fn=preprocess_fn)
+            query_strategy = MarginSamplingQueryStrategy()
             query_kwargs = {
                 "query_batch_size": self.config["query_batch_size"],
             }
         elif self.config["query_strategy"] == "entropy":
             from query.entropy import EntropyQueryStrategy
-            query_strategy = EntropyQueryStrategy(preprocess_input_fn=preprocess_fn)
+            query_strategy = EntropyQueryStrategy()
             query_kwargs = {
                 "query_batch_size": self.config["query_batch_size"],
             }

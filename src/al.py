@@ -203,10 +203,11 @@ class ActiveLearning:
         self.idx_queried = np.concatenate([self.idx_queried, idx])
         print(f"Total amount of queried samples post-query: {len(self.idx_queried)}")
 
-    def query(self, X_pool, metadata, n_query_instances, model, seed=None, **query_kwargs):
+    def query(self, X_pool, metadata, n_query_instances, seed=None, **query_kwargs):
         """Call to query strategy function"""
 
-        return self.query_strategy(X_pool, metadata, n_query_instances, model, seed=seed, **query_kwargs)
+        self.query_strategy.set_model(self.current_model, self.preprocess_input_fn)
+        return self.query_strategy(X_pool, metadata, n_query_instances, seed=seed, **query_kwargs)
 
     def learn(self,
               n_loops,
@@ -242,7 +243,7 @@ class ActiveLearning:
             if i > 0:
                 X_pool, idx_pool, metadata = self.get_pool(preprocess=False, get_metadata=True)
                 print("Querying")
-                idx_query = self.query(X_pool, metadata, n_query_instances, self.current_model, seed=seed, **query_kwargs)
+                idx_query = self.query(X_pool, metadata, n_query_instances, seed=seed, **query_kwargs)
                 print(f"Queried {len(idx_query)} samples.")
                 self.add_to_train(idx_pool[idx_query])
                 print("Deleting pool")
