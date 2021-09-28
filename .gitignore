@@ -1,3 +1,14 @@
+# Scripts
+*.sh
+*.sbatch
+*.sbatch.*
+
+# Data
+data/*
+
+# Logs
+logs/*
+
 # PyCharm
 .idea
 
