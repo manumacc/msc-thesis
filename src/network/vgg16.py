@@ -1,4 +1,5 @@
-from tensorflow.keras import layers, initializers
+from tensorflow.keras.applications import vgg16
+from tensorflow.keras import layers
 from tensorflow.keras import Model
 
 def VGG16(n_classes,
