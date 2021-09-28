@@ -34,6 +34,11 @@ class Experiment:
                               dropout_rate=self.config["fc_dropout_rate"],
                               dense_units=self.config["dense_units"],
                               freeze_extractor=self.config["freeze_extractor"])
+            if self.config["model"] == "ResNet50":
+                from network.resnet50 import ResNet50
+                print("Instantiating ResNet50 model")
+                model = ResNet50(n_classes=self.config["n_classes"],
+                                 freeze_extractor=self.config["freeze_extractor"])
 
             loss_fn = None
             if self.config["loss"] == "categorical_crossentropy":
@@ -58,6 +63,9 @@ class Experiment:
         target_size = None
         if self.config["model"] == "VGG16":
             preprocess_fn = tf.keras.applications.vgg16.preprocess_input
+            target_size = (224, 224)
+        if self.config["model"] == "ResNet50":
+            preprocess_fn = tf.keras.applications.resnet50.preprocess_input
             target_size = (224, 224)
 
         callbacks = []

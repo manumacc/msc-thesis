@@ -16,21 +16,22 @@ config_dict = {
     "class_sample_size_test": 300,  # imagenette limit: 300
 
     ## Model
-    "model": "VGG16",
+    "model": "ResNet50",
     "freeze_extractor": False,  # if True, load ImageNet weights for feature extractor
 
+    # VGG16
     "fc_dropout_rate": 0.5,
     "dense_units": 4096,
 
     ## Learning
     "optimizer": "SGDW",
 
-    "lr_init": 1e-2,
+    "lr_init": 0.1,  # VGG16: 1e-2; ResNet: 0.1
     "momentum": 0.9,
-    "weight_decay": 5e-4,
+    "weight_decay": 1e-4,  # VGG16: 5e-4; ResNet: 1e-4
 
-    "batch_size": 256,  # VGG16 paper: 256
-    "n_epochs": 50,
+    "batch_size": 256,
+    "n_epochs": 100,
 
     "loss": "categorical_crossentropy",
 
@@ -38,7 +39,7 @@ config_dict = {
         "decay_early_stopping"
     ],
 
-    "decay_early_stopping_patience": 5,
+    "decay_early_stopping_patience": 10,
     "decay_early_stopping_times": 3,
 
     ## Active learning
