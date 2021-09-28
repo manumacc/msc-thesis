@@ -6,6 +6,8 @@ import numpy as np
 
 from PIL import Image
 
+from utils import Profiling, pil_to_ndarray, ndarray_to_pil
+
 
 class ActiveLearning:
     def __init__(self,
@@ -95,7 +97,7 @@ class ActiveLearning:
                 fpath = os.path.join(cpath, f)
 
                 img = self._load_img(fpath, target_size=self.target_size)
-                arr = self._pil_to_ndarray(img)
+                arr = utils.pil_to_ndarray(img)
                 arrs.append(arr)
 
             X_c = np.stack(arrs)
@@ -309,32 +311,6 @@ class ActiveLearning:
                 image = image.resize((width, height), Image.NEAREST)
 
         return image
-
-    @staticmethod
-    def _pil_to_ndarray(image):
-        """Convert a PIL Image instance to a numpy ndarray"""
-
-        x = np.asarray(image, dtype='float32')
-
-        if len(x.shape) == 2:
-            x = x.reshape((x.shape[0], x.shape[1], 1))
-        elif len(x.shape) != 3:
-            raise ValueError(f"Unsupported image shape: {x.shape}")
-
-        return x
-
-    @staticmethod
-    def _ndarray_to_pil(x):
-        """Convert a numpy ndarray to a PIL Image instance"""
-
-        x = np.asarray(x, dtype='uint8')
-
-        if x.shape[2] == 1:
-            return Image.fromarray(x[:, :, 0], 'L')
-        elif x.shape[2] == 3:
-            return Image.fromarray(x, 'RGB')
-        else:
-            raise ValueError(f"Unsupported image shape: {x.shape}")
 
     @staticmethod
     def _one_hot_encode(y):
