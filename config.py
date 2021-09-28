@@ -1,7 +1,7 @@
 config_dict = {
     ## Logging
     "save_logs": True,
-    "save_models": True,
+    "save_models": False,
 
     ## Seed
     "seed": 123,
@@ -17,6 +17,7 @@ config_dict = {
 
     ## Model
     "model": "VGG16",
+    "freeze_extractor": False,  # if True, load ImageNet weights for feature extractor
 
     "fc_dropout_rate": 0.5,
     "dense_units": 4096,

@@ -29,11 +29,11 @@ class Experiment:
             model = None
             if self.config["model"] == "VGG16":
                 from network.vgg16 import VGG16
-                print(f"Instantiating VGG16 model with seed {seed}")
+                print("Instantiating VGG16 model")
                 model = VGG16(n_classes=self.config["n_classes"],
                               dropout_rate=self.config["fc_dropout_rate"],
                               dense_units=self.config["dense_units"],
-                              seed=seed)
+                              freeze_extractor=self.config["freeze_extractor"])
 
             loss_fn = None
             if self.config["loss"] == "categorical_crossentropy":

@@ -26,6 +26,7 @@ class ActiveLearning:
         self.query_strategy = query_strategy
 
         self.current_model = None
+        self.weights_initial_model = None
         self.model_initialization_fn = model_initialization_fn
         self.model_callbacks = model_callbacks if model_callbacks else []
 
@@ -138,8 +139,15 @@ class ActiveLearning:
 
         return X_train_init, y_train_init, X_pool, y_pool, X_test, y_test, cls_train
 
-    def initialize_model(self, seed=None):
-        self.current_model = self.model_initialization_fn(seed=seed)
+    def initialize_model(self):
+        if self.current_model is None:
+            self.current_model = self.model_initialization_fn()
+            print("Saving initial weights")
+            self.weights_initial_model = self.current_model.get_weights()
+        else:
+            self.current_model = self.model_initialization_fn()
+            print("Resetting initial weights")
+            self.current_model.set_weights(self.weights_initial_model)
 
     def get_train(self, preprocess=True, seed=None):
         """Get current training dataset along with the validation set."""
@@ -236,7 +244,7 @@ class ActiveLearning:
             print(f"* Iteration #{i}")
 
             print("Initializing new model")
-            self.initialize_model(seed=seed)
+            self.initialize_model()
 
             if i > 0:
                 X_pool, idx_pool, metadata = self.get_pool(preprocess=False, get_metadata=True)
