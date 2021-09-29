@@ -97,7 +97,7 @@ class ActiveLearning:
                 fpath = os.path.join(cpath, f)
 
                 img = self._load_img(fpath, target_size=self.target_size)
-                arr = utils.pil_to_ndarray(img)
+                arr = pil_to_ndarray(img)
                 arrs.append(arr)
 
             X_c = np.stack(arrs)
