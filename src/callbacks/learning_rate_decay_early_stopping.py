@@ -54,19 +54,19 @@ class LearningRateDecayEarlyStopping(Callback):
         if current is None:
             return
 
-        if self.restore_best_weights and self.best_weights is None:
+        if self.restore_best_weights and self.best_weights is None and epoch > 0:
             # Restore the weights after first epoch if no progress is ever made.
             self.best_weights = self.model.get_weights()
 
         self.wait += 1
 
-        if self._is_improvement(current, self.best):
+        if self._is_improvement(current, self.best) and epoch > 0:  # Ignore first epoch
             self.best = current
             if self.restore_best_weights:
                 self.best_weights = self.model.get_weights()
             self.wait = 0
 
-        if self.wait >= self.patience and epoch > 0:  # Only check after the first epoch
+        if self.wait >= self.patience and epoch > 0:
             if self.current_decay_level >= self.n_decay:
                 self.model.stop_training = True
                 self.stopped_epoch = epoch
@@ -77,7 +77,7 @@ class LearningRateDecayEarlyStopping(Callback):
                 lr = lr * 0.1
                 backend.set_value(self.model.optimizer.lr, backend.get_value(lr))
                 if self.verbose > 0:
-                    print('Epoch %05d: learning rate decayed' % (epoch + 1))
+                    print(f"Epoch {epoch + 1}: learning rate decayed")
 
             if self.restore_best_weights and self.best_weights is not None:
                 if self.verbose > 0:
@@ -88,7 +88,7 @@ class LearningRateDecayEarlyStopping(Callback):
 
     def on_train_end(self, logs=None):
         if self.stopped_epoch > 0 and self.verbose > 0:
-            print('Epoch %05d: early stopping' % (self.stopped_epoch + 1))
+            print(f"Epoch {self.stopped_epoch + 1}: early stopping")
 
     def get_monitor_value(self, logs):
         logs = logs or {}
