@@ -73,6 +73,8 @@ class Experiment:
             from callbacks.learning_rate_decay_early_stopping import LearningRateDecayEarlyStopping
             callback = LearningRateDecayEarlyStopping(patience=self.config["decay_early_stopping_patience"],
                                                       n_decay=self.config["decay_early_stopping_times"],
+                                                      min_delta=self.config["decay_early_stopping_min_delta"],
+                                                      restore_best_weights=self.config["decay_early_stopping_restore_best_weights"],
                                                       verbose=1)
             callbacks.append(callback)
 
