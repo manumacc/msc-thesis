@@ -22,7 +22,6 @@ class Experiment:
             print(f"- {k} = {v}")
 
         start = default_timer()
-        start_dt = datetime.datetime.now()
 
         # Model build
         def model_init(seed=None):
@@ -105,7 +104,7 @@ class Experiment:
 
         # Active learning loop
         if self.config["save_logs"]:
-            path_logs = pathlib.Path("logs", f"{name}_{start_dt.strftime('%Y%m%d_%H%M%S')}")
+            path_logs = pathlib.Path("logs", f"{name}")
             path_logs.mkdir(parents=True, exist_ok=False)
         else:
             path_logs = None
