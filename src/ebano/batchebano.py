@@ -66,12 +66,10 @@ class Explainer:
                 f_i = 0
                 for layer_i, layer_activations in enumerate(activations):  # layer_activations.shape = (batch size, filter x, filter y, num filters) e.g., (8, 14, 14, 512)
                     layer_activations_img = layer_activations[img_i].transpose((2, 0, 1))  # (num filters, filter x, filter y)
-                    print(f"> Number of filters of layer {layer_i}: {len(layer_activations_img)}")
                     for filter_activations_img in layer_activations_img:
                         scaled = np.array(Image.fromarray(filter_activations_img).resize(self.input_shape, Image.BILINEAR))
                         hc[img_i, f_i] = scaled
                         f_i += 1
-                    print(f"> Layer {layer_i} is up to {f_i} filters")
 
             hc = hc.reshape((len(X), n_filters, np.prod(self.input_shape))).transpose((0, 2, 1))  # (batch_size, x*y (224*224), num filters)
 
@@ -99,8 +97,6 @@ class Explainer:
                 print(f"Normalize hypercolumns of image {i}")
                 hc_r[i] = normalize(hc_r[i], norm='l2', axis=1)  # L2 normalization over features
 
-        # hc_r = hc_r.reshape((len(hc_r), *self.input_shape, features))
-
         return hc_r
 
     @staticmethod
@@ -125,9 +121,9 @@ class Explainer:
         for n_clusters in range(min_features, max_features+1):
             with Profiling(f"Compute explanation for {n_clusters} clusters"):
                 if clustering == "minibatchkmeans":
-                    model = MiniBatchKMeans(n_clusters=n_clusters, random_state=seed, **kwargs)
+                    model = MiniBatchKMeans(n_clusters=n_clusters, random_state=seed, max_iter=kwargs["max_iter"], batch_size=kwargs["batch_size"])
                 elif clustering == "kmeans":
-                    model = KMeans(n_clusters=n_clusters, random_state=seed, **kwargs)
+                    model = KMeans(n_clusters=n_clusters, random_state=seed, max_iter=kwargs["max_iter"])
                 else:
                     raise ValueError(f"Unsupported clustering algorithm: {clustering}")
 
@@ -345,6 +341,7 @@ class Explainer:
     def fit_batch(self,
                   X,
                   cois,
+                  y=None,
                   preprocess_input_fn=None,
                   hypercolumn_features=30,
                   hypercolumn_reduction="pca",
@@ -360,6 +357,7 @@ class Explainer:
         Args:
             X: Array of (unprocessed) images to explain.
             cois: Classes of interest.
+            y: Ground truth, useful for debugging purposes. Ignored otherwise.
             preprocess_input_fn: Preprocessing function to apply to the array.
             hypercolumn_features:
             hypercolumn_reduction:
@@ -404,6 +402,7 @@ class Explainer:
             if display_plots:
                 for i in range(len(X)):
                     print(f"# image {i}, best explanation k={best[i]+min_features}")
+                    print(f"# coi (pred): {cois[i]} ground truth: {y[i]} correctly classified: {cois[i] == y[i]}")
                     k_best = best[i]
                     mask = X_masks_map == k_best
                     image_i = utils.ndarray_to_pil(X[i])
