@@ -37,9 +37,11 @@ def VGG16(n_classes,
     x = layers.Flatten(name='flatten')(x)
 
     x = layers.Dense(dense_units, activation='relu', name='fc1')(x)
-    x = layers.Dropout(dropout_rate, name='fc1_dropout')(x)
+    if dropout_rate > 0:
+        x = layers.Dropout(dropout_rate, name='fc1_dropout')(x)
     x = layers.Dense(dense_units, activation='relu', name='fc2')(x)
-    x = layers.Dropout(dropout_rate, name='fc2_dropout')(x)
+    if dropout_rate > 0:
+        x = layers.Dropout(dropout_rate, name='fc2_dropout')(x)
 
     output = layers.Dense(n_classes, activation='softmax', name='predictions')(x)
 
