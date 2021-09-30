@@ -77,24 +77,29 @@ class Explainer:
             # Here, each image is treated as a "dataset" with np.prod(input_shape)
             # samples, each of which has `n_filters` features. We want to reduce
             # the number of these features to `features`.
-            hc_r = np.empty((len(X), *self.input_shape, features), dtype='float32')  # (batch size, x*y, features)
+            hc_r = np.empty((len(X), np.prod(self.input_shape), features), dtype='float32')  # (batch size, x*y, features)
 
             if reduction == "pca":
                 for i, hc_i in enumerate(hc):
                     print(f"Performing PCA image {i}")
-                    hc_r[i] = self._hypercolumn_reduction_pca(hc_i, n_components=features).reshape((*self.input_shape, features))
+                    hc_r[i] = self._hypercolumn_reduction_pca(hc_i, n_components=features)
             elif reduction == "tsvd":
                 for i, hc_i in enumerate(hc):
                     print(f"Performing TSVD image {i}")
-                    hc_r[i] = self._hypercolumn_reduction_tsvd(hc_i, n_components=features).reshape((*self.input_shape, features))
+                    hc_r[i] = self._hypercolumn_reduction_tsvd(hc_i, n_components=features)
             else:
                 raise ValueError(f"Unsupported dimensionality reduction: {reduction}")
 
-        with Profiling("Normalize (L2) hypercolumns"):
-            for i in range(len(hc)):
-                hc[i] = normalize(hc[i], norm='l2', axis=1)  # L2 normalization over features
+            del hc
 
-        return hc
+        with Profiling("Normalize (L2) hypercolumns"):
+            for i in range(len(hc_r)):
+                print(f"Normalize hypercolumns of image {i}")
+                hc_r[i] = normalize(hc_r[i], norm='l2', axis=1)  # L2 normalization over features
+
+        # hc_r = hc_r.reshape((len(hc_r), *self.input_shape, features))
+
+        return hc_r
 
     @staticmethod
     def _hypercolumn_reduction_pca(hc, n_components):
@@ -393,13 +398,14 @@ class Explainer:
 
         nPIR, nPIRP, best = self.explain_numeric(preds_perturbed, preds_original, X_masks_map, cois)
 
-        if display_plots:
-            for i in range(len(X)):
-                print(f"# image {i}, best explanation k={best[i]+min_features}")
-                k_best = best[i]
-                mask = X_masks_map == k_best
-                image_i = utils.ndarray_to_pil(X[i])
-                self.explain_visual(image_i, cois[i], X_masks[i][mask], nPIR[i][mask], nPIRP[i][mask])
+        with Profiling("Explain visually"):
+            if display_plots:
+                for i in range(len(X)):
+                    print(f"# image {i}, best explanation k={best[i]+min_features}")
+                    k_best = best[i]
+                    mask = X_masks_map == k_best
+                    image_i = utils.ndarray_to_pil(X[i])
+                    self.explain_visual(image_i, cois[i], X_masks[i][mask], nPIR[i][mask], nPIRP[i][mask])
 
     @staticmethod
     def softsign(x):
