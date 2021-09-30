@@ -6,6 +6,7 @@ from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import normalize
 
+import tensorflow as tf
 from tensorflow.python import keras
 from tensorflow.python.keras import backend as K
 from PIL import Image, ImageFilter
@@ -466,7 +467,7 @@ class LocalExplanationModel:
         i = 0
         for l in model.layers:
             layer_name = str.lower(l.get_config()["name"])
-            if (isinstance(l, keras.layers.Conv2D)) | ("conv2d" in layer_name):
+            if (isinstance(l, tf.keras.layers.Conv2D)) | ("conv2d" in layer_name):
                 layer_indexes.append(i)
             i = i + 1
         return layer_indexes

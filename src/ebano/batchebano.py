@@ -61,15 +61,17 @@ class Explainer:
             hc = np.empty((len(X), n_filters, *self.input_shape), dtype='float32')  # (batch size, num features, filter x, filter y)
 
             # Extract hypercolumns
-            for layer_activations in activations:  # layer_activations.shape = (batch size, filter x, filter y, num filters) e.g., (8, 14, 14, 512)
-                layer_activations_t = layer_activations.transpose((0, 3, 1, 2))  # (batch size, num filters, filter x, filter y)
-
-                for img_i, x_layer_activations in enumerate(layer_activations_t):  # (num filters, filter x, filter y)
-                    f_i = 0
-                    for x_filter in x_layer_activations:  # Iterate over filters (i.e., kernels)
-                        scaled = np.array(Image.fromarray(x_filter).resize(self.input_shape, Image.BILINEAR))
+            for img_i in range(len(X)):
+                print(f"Image {img_i}")
+                f_i = 0
+                for layer_i, layer_activations in enumerate(activations):  # layer_activations.shape = (batch size, filter x, filter y, num filters) e.g., (8, 14, 14, 512)
+                    layer_activations_img = layer_activations[img_i].transpose((2, 0, 1))  # (num filters, filter x, filter y)
+                    print(f"> Number of filters of layer {layer_i}: {len(layer_activations_img)}")
+                    for filter_activations_img in layer_activations_img:
+                        scaled = np.array(Image.fromarray(filter_activations_img).resize(self.input_shape, Image.BILINEAR))
                         hc[img_i, f_i] = scaled
                         f_i += 1
+                    print(f"> Layer {layer_i} is up to {f_i} filters")
 
             hc = hc.reshape((len(X), n_filters, np.prod(self.input_shape))).transpose((0, 2, 1))  # (batch_size, x*y (224*224), num filters)
 
