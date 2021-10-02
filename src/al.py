@@ -148,7 +148,7 @@ class ActiveLearning:
         print(optimizer.get_config())
 
         print("Loading base model weights")
-        path_model = pathlib.Path("models", model_name)
+        path_model = pathlib.Path("models", model_name, model_name)
         self.model.load_weights(path_model)
 
         print("Compiling model")
@@ -250,12 +250,26 @@ class ActiveLearning:
 
         X_test, y_test = self.get_test()
 
+        print("Initializing base model")
+        self.initialize_base_model(base_model_name)
+
         # Active learning loop
         for i in range(n_loops):
             print(f"* Iteration #{i+1}")
 
-            print("Initializing base model")
-            self.initialize_base_model(base_model_name)
+            if i > 0:
+                self.model, loss_fn, optimizer = self.model_initialization_fn()
+
+                print("Optimizer configuration")
+                print(optimizer.get_config())
+
+                print("Compiling model")
+                self.model.compile(optimizer=optimizer,
+                                   loss=loss_fn,
+                                   metrics=["accuracy"])
+
+                print("Setting weights to last available weights")
+                self.model.set_weights(self.model_weights_checkpoint)
 
             X_pool, idx_pool, metadata = self.get_pool(preprocess=False, get_metadata=True)
             print("Querying")
@@ -287,11 +301,12 @@ class ActiveLearning:
             del X_train, y_train
 
             print("Evaluating model")
-            test_metrics = self.model.evaluate(X_test, y_test,
-                                                       batch_size=batch_size)
+            test_metrics = self.model.evaluate(X_test, y_test, batch_size=batch_size)
 
             if self.save_logs:
                 self.al_logs["test"].append(test_metrics)
+
+            self.model_weights_checkpoint = self.model.get_weights()
 
     def train_base(self,
                    model_name,
@@ -317,12 +332,12 @@ class ActiveLearning:
         print(np.unique(self._one_hot_decode(y_train), return_counts=True))
 
         print("Fitting base model")
-        history = self.model.fit(X_train, y_train,
-                                 validation_split=self.val_size,
-                                 batch_size=batch_size,
-                                 epochs=n_epochs,
-                                 shuffle=True,
-                                 callbacks=self.model_callbacks)
+        history = model.fit(X_train, y_train,
+                            validation_split=self.val_size,
+                            batch_size=batch_size,
+                            epochs=n_epochs,
+                            shuffle=True,
+                            callbacks=self.model_callbacks)
         del X_train, y_train
 
         if self.save_logs:
@@ -330,8 +345,7 @@ class ActiveLearning:
 
         X_test, y_test = self.get_test()
         print("Evaluating model")
-        test_metrics = self.model.evaluate(X_test, y_test,
-                                           batch_size=batch_size)
+        test_metrics = model.evaluate(X_test, y_test, batch_size=batch_size)
         del X_test, y_test
 
         if self.save_logs:
@@ -339,7 +353,8 @@ class ActiveLearning:
 
         print("Saving base model weights")
         path_model = pathlib.Path("models", model_name)
-        model.save_weights(path_model)
+        path_model.mkdir(parents=True, exist_ok=False)
+        model.save_weights(pathlib.Path(path_model, model_name))
 
     @staticmethod
     def _joint_shuffle(a, b, seed=0):
