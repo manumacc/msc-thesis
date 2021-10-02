@@ -34,7 +34,7 @@ config_dict = {
 
     "val_size": 0.1,  # With respect to current training set
 
-    "lr_init": 0.1,  # VGG16: 1e-2; ResNet: 0.1
+    "lr_init": 0.01,  # VGG16: 1e-2; ResNet: 0.1
     "momentum": 0.9,
     "weight_decay": 1e-4,  # VGG16: 5e-4; ResNet: 1e-4
     "n_epochs": 100,
