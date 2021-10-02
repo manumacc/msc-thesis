@@ -28,6 +28,7 @@ class ActiveLearning:
         self.query_strategy = query_strategy
 
         self.model = None
+        self.model_weights_checkpoint = None
         self.model_initialization_fn = model_initialization_fn
         self.model_callbacks = model_callbacks if model_callbacks else []
 

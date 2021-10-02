@@ -13,7 +13,7 @@ class Experiment:
     def __init__(self, config):
         self.config = config
 
-    def run(self, name, query_strategy, train_base=False):
+    def run(self, name, query_strategy=None, train_base=False):
         self.config["name"] = name
         self.config["query_strategy"] = query_strategy
 
