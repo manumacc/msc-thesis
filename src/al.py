@@ -6,7 +6,7 @@ import numpy as np
 
 from PIL import Image
 
-from utils import Profiling, pil_to_ndarray, ndarray_to_pil
+from utils import pil_to_ndarray
 
 
 class ActiveLearning:
@@ -21,14 +21,13 @@ class ActiveLearning:
                  class_sample_size_test,
                  init_size,
                  val_size,
-                 seed=None,
                  model_callbacks=None,
                  path_logs=None,
-                 save_models=False):
+                 save_models=False,
+                 dataset_seed=None):
         self.query_strategy = query_strategy
 
-        self.current_model = None
-        self.weights_initial_model = None
+        self.model = None
         self.model_initialization_fn = model_initialization_fn
         self.model_callbacks = model_callbacks if model_callbacks else []
 
@@ -39,9 +38,10 @@ class ActiveLearning:
         self.val_size = val_size
 
         self.X_train_init, self.y_train_init, self.X_pool, self.y_pool, self.X_test, self.y_test, self.classes = (
-            self.initialize_dataset(path_train, path_test, class_sample_size_train, class_sample_size_test, seed=seed)
+            self.initialize_dataset(path_train, path_test, class_sample_size_train, class_sample_size_test, seed=dataset_seed)
         )
 
+        self.idx_queried_last = None
         self.idx_queried = np.array([], dtype=int)
 
         if path_logs:
@@ -141,15 +141,20 @@ class ActiveLearning:
 
         return X_train_init, y_train_init, X_pool, y_pool, X_test, y_test, cls_train
 
-    def initialize_model(self):
-        if self.current_model is None:
-            self.current_model = self.model_initialization_fn()
-            print("Saving initial weights")
-            self.weights_initial_model = self.current_model.get_weights()
-        else:
-            self.current_model = self.model_initialization_fn()
-            print("Resetting initial weights")
-            self.current_model.set_weights(self.weights_initial_model)
+    def initialize_base_model(self, model_name):
+        self.model, loss_fn, optimizer = self.model_initialization_fn()
+
+        print("Optimizer configuration")
+        print(optimizer.get_config())
+
+        print("Loading base model weights")
+        path_model = pathlib.Path("models", model_name)
+        self.model.load_weights(path_model)
+
+        print("Compiling model")
+        self.model.compile(optimizer=optimizer,
+                           loss=loss_fn,
+                           metrics=["accuracy"])
 
     def get_train(self, preprocess=True, seed=None):
         """Get current training dataset along with the validation set."""
@@ -193,6 +198,7 @@ class ActiveLearning:
             return X_pool, idx_pool
 
     def get_test(self, preprocess=True):
+        # WARNING: must only be run once (since prepare dataset overwrites its argument)
         if preprocess:
             print("Preprocessing test dataset")
             self.X_test = self._prepare_dataset(self.X_test)
@@ -211,12 +217,13 @@ class ActiveLearning:
         """
 
         self.idx_queried = np.concatenate([self.idx_queried, idx])
+        self.idx_queried_last = idx
         print(f"Total amount of queried samples post-query: {len(self.idx_queried)}")
 
     def query(self, X_pool, metadata, n_query_instances, seed=None, **query_kwargs):
         """Call to query strategy function"""
 
-        self.query_strategy.set_model(self.current_model, self.preprocess_input_fn)
+        self.query_strategy.set_model(self.model, self.preprocess_input_fn)
         return self.query_strategy(X_pool, metadata, n_query_instances, seed=seed, **query_kwargs)
 
     def learn(self,
@@ -224,6 +231,7 @@ class ActiveLearning:
               n_query_instances,
               batch_size,
               n_epochs,
+              base_model_name,
               seed=None,
               **query_kwargs):
         """Runs active learning loops.
@@ -233,6 +241,7 @@ class ActiveLearning:
             n_query_instances: Number of instances to query at each iteration
             batch_size: Batch size for model fit and evaluation
             n_epochs: Number of epochs for model fit
+            base_model_name:
             seed: Reproducibility for query strategy
             **query_kwargs: Query strategy kwargs
         """
@@ -242,47 +251,95 @@ class ActiveLearning:
         X_test, y_test = self.get_test()
 
         # Active learning loop
-        for i in range(n_loops + 1):
-            print(f"* Iteration #{i}")
+        for i in range(n_loops):
+            print(f"* Iteration #{i+1}")
 
-            print("Initializing new model")
-            self.initialize_model()
+            print("Initializing base model")
+            self.initialize_base_model(base_model_name)
 
-            if i > 0:
-                X_pool, idx_pool, metadata = self.get_pool(preprocess=False, get_metadata=True)
-                print("Querying")
-                idx_query = self.query(X_pool, metadata, n_query_instances, seed=seed, **query_kwargs)
-                print(f"Queried {len(idx_query)} samples.")
-                self.add_to_train(idx_pool[idx_query])
-                print("Deleting pool")
-                del X_pool, idx_query
+            X_pool, idx_pool, metadata = self.get_pool(preprocess=False, get_metadata=True)
+            print("Querying")
+            idx_query = self.query(X_pool, metadata, n_query_instances, seed=seed, **query_kwargs)
+            print(f"Queried {len(idx_query)} samples.")
+            self.add_to_train(idx_pool[idx_query])
+            print("Deleting pool")
+            del X_pool, idx_query
 
             X_train, y_train = self.get_train(preprocess=True, seed=seed)
             print("Composition of current training set:")
             print(np.unique(self._one_hot_decode(y_train), return_counts=True))
             print("Fitting model")
-            history = self.current_model.fit(X_train, y_train,
-                                             validation_split=self.val_size,
-                                             batch_size=batch_size,
-                                             epochs=n_epochs,
-                                             shuffle=True,
-                                             callbacks=self.model_callbacks)
+            history = self.model.fit(X_train, y_train,
+                                     validation_split=self.val_size,
+                                     batch_size=batch_size,
+                                     epochs=n_epochs,
+                                     shuffle=True,
+                                     callbacks=self.model_callbacks)
+
             if self.save_logs:
                 self.al_logs["train"].append(history.history)
 
             if self.save_models:
                 print("Saving model")
-                self.current_model.save(pathlib.Path(self.path_logs, f"model_iter_{i}"))
+                self.model.save(pathlib.Path(self.path_logs, f"model_iter_{i+1}"))
 
             print("Deleting training set")
             del X_train, y_train
 
             print("Evaluating model")
-            test_metrics = self.current_model.evaluate(X_test, y_test,
+            test_metrics = self.model.evaluate(X_test, y_test,
                                                        batch_size=batch_size)
 
             if self.save_logs:
                 self.al_logs["test"].append(test_metrics)
+
+    def train_base(self,
+                   model_name,
+                   batch_size,
+                   n_epochs,
+                   seed=None):
+        """Train and save base model"""
+
+        logs = {"train": [], "test": None}
+
+        model, loss_fn, optimizer = self.model_initialization_fn(base=True)
+
+        print("Optimizer configuration")
+        print(optimizer.get_config())
+
+        print("Compiling model")
+        model.compile(optimizer=optimizer,
+                      loss=loss_fn,
+                      metrics=["accuracy"])
+
+        X_train, y_train = self.get_train(preprocess=True, seed=seed)
+        print("Composition of initial training set:")
+        print(np.unique(self._one_hot_decode(y_train), return_counts=True))
+
+        print("Fitting base model")
+        history = self.model.fit(X_train, y_train,
+                                 validation_split=self.val_size,
+                                 batch_size=batch_size,
+                                 epochs=n_epochs,
+                                 shuffle=True,
+                                 callbacks=self.model_callbacks)
+        del X_train, y_train
+
+        if self.save_logs:
+            logs["train"].append(history.history)
+
+        X_test, y_test = self.get_test()
+        print("Evaluating model")
+        test_metrics = self.model.evaluate(X_test, y_test,
+                                           batch_size=batch_size)
+        del X_test, y_test
+
+        if self.save_logs:
+            logs["test"] = test_metrics
+
+        print("Saving base model weights")
+        path_model = pathlib.Path("models", model_name)
+        model.save_weights(path_model)
 
     @staticmethod
     def _joint_shuffle(a, b, seed=0):

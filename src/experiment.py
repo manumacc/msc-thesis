@@ -1,5 +1,4 @@
 import pathlib
-import datetime
 import pickle
 
 from timeit import default_timer
@@ -13,7 +12,7 @@ class Experiment:
     def __init__(self, config):
         self.config = config
 
-    def run(self, name, query_strategy):
+    def run(self, name, query_strategy, train_base=False):
         self.config["name"] = name
         self.config["query_strategy"] = query_strategy
 
@@ -21,10 +20,8 @@ class Experiment:
         for k, v in self.config.items():
             print(f"- {k} = {v}")
 
-        start = default_timer()
-
         # Model build
-        def model_init(seed=None):
+        def model_initializer(base=False):
             model = None
             if self.config["model"] == "VGG16":
                 from network.vgg16 import VGG16
@@ -45,18 +42,13 @@ class Experiment:
 
             optimizer = None
             if self.config["optimizer"] == "SGDW":
-                optimizer = tfa.optimizers.SGDW(learning_rate=self.config["lr_init"],
+                optimizer = tfa.optimizers.SGDW(learning_rate=self.config["lr_init"] if not base else self.config["base_lr_init"],
                                                 momentum=self.config["momentum"],
-                                                weight_decay=self.config["weight_decay"])
+                                                weight_decay=self.config["weight_decay"] if not base else self.config["base_weight_decay"])
 
-            print("Compiling model")
-            model.compile(optimizer=optimizer,
-                          loss=loss_fn,
-                          metrics=["accuracy"])
+            return model, loss_fn, optimizer
 
-            return model
-
-        model_initialization_fn = model_init
+        model_initialization_fn = model_initializer
 
         preprocess_fn = None
         target_size = None
@@ -68,47 +60,61 @@ class Experiment:
             target_size = (224, 224)
 
         callbacks = []
-        if "decay_early_stopping" in self.config["callbacks"]:
-            from callbacks.learning_rate_decay_early_stopping import LearningRateDecayEarlyStopping
-            callback = LearningRateDecayEarlyStopping(patience=self.config["decay_early_stopping_patience"],
-                                                      n_decay=self.config["decay_early_stopping_times"],
-                                                      min_delta=self.config["decay_early_stopping_min_delta"],
-                                                      restore_best_weights=self.config["decay_early_stopping_restore_best_weights"],
-                                                      verbose=1)
-            callbacks.append(callback)
-
-        # Query strategy
         query_strategy = None
         query_kwargs = {}
-        if self.config["query_strategy"] == "random":
-            from query.random import RandomQueryStrategy
-            query_strategy = RandomQueryStrategy()
-        elif self.config["query_strategy"] == "least-confident":
-            from query.least_confident import LeastConfidentQueryStrategy
-            query_strategy = LeastConfidentQueryStrategy()
-            query_kwargs = {
-                "query_batch_size": self.config["query_batch_size"],
-            }
-        elif self.config["query_strategy"] == "margin-sampling":
-            from query.margin_sampling import MarginSamplingQueryStrategy
-            query_strategy = MarginSamplingQueryStrategy()
-            query_kwargs = {
-                "query_batch_size": self.config["query_batch_size"],
-            }
-        elif self.config["query_strategy"] == "entropy":
-            from query.entropy import EntropyQueryStrategy
-            query_strategy = EntropyQueryStrategy()
-            query_kwargs = {
-                "query_batch_size": self.config["query_batch_size"],
-            }
 
-        # Active learning loop
+        if train_base:
+            if "decay_early_stopping" in self.config["base_callbacks"]:
+                from callbacks.learning_rate_decay_early_stopping import LearningRateDecayEarlyStopping
+                callback = LearningRateDecayEarlyStopping(patience=self.config["base_decay_early_stopping_patience"],
+                                                          n_decay=self.config["base_decay_early_stopping_times"],
+                                                          min_delta=self.config["base_decay_early_stopping_min_delta"],
+                                                          restore_best_weights=self.config["base_decay_early_stopping_restore_best_weights"],
+                                                          verbose=1)
+                callbacks.append(callback)
+
+        else:
+            if "decay_early_stopping" in self.config["callbacks"]:
+                from callbacks.learning_rate_decay_early_stopping import LearningRateDecayEarlyStopping
+                callback = LearningRateDecayEarlyStopping(patience=self.config["decay_early_stopping_patience"],
+                                                          n_decay=self.config["decay_early_stopping_times"],
+                                                          min_delta=self.config["decay_early_stopping_min_delta"],
+                                                          restore_best_weights=self.config[
+                                                              "decay_early_stopping_restore_best_weights"],
+                                                          verbose=1)
+                callbacks.append(callback)
+
+            # Query strategy
+            if self.config["query_strategy"] == "random":
+                from query.random import RandomQueryStrategy
+                query_strategy = RandomQueryStrategy()
+            elif self.config["query_strategy"] == "least-confident":
+                from query.least_confident import LeastConfidentQueryStrategy
+                query_strategy = LeastConfidentQueryStrategy()
+                query_kwargs = {
+                    "query_batch_size": self.config["query_batch_size"],
+                }
+            elif self.config["query_strategy"] == "margin-sampling":
+                from query.margin_sampling import MarginSamplingQueryStrategy
+                query_strategy = MarginSamplingQueryStrategy()
+                query_kwargs = {
+                    "query_batch_size": self.config["query_batch_size"],
+                }
+            elif self.config["query_strategy"] == "entropy":
+                from query.entropy import EntropyQueryStrategy
+                query_strategy = EntropyQueryStrategy()
+                query_kwargs = {
+                    "query_batch_size": self.config["query_batch_size"],
+                }
+
+        # Initialize logging
         if self.config["save_logs"]:
-            path_logs = pathlib.Path("logs", f"{name}")
+            path_logs = pathlib.Path("logs", name)
             path_logs.mkdir(parents=True, exist_ok=False)
         else:
             path_logs = None
 
+        # Initialize active learning loop
         al_loop = al.ActiveLearning(
             path_train=self.config["data_path_train"],
             path_test=self.config["data_path_test"],
@@ -120,27 +126,40 @@ class Experiment:
             class_sample_size_test=self.config["class_sample_size_test"],
             init_size=self.config["init_size"],
             val_size=self.config["val_size"],
-            seed=self.config["seed"],
             model_callbacks=callbacks,
             path_logs=path_logs,
-            save_models=self.config["save_models"]
+            save_models=self.config["save_models"],
+            dataset_seed=self.config["dataset_seed"],
         )
 
-        al_loop.learn(
-            n_loops=self.config["n_loops"],
-            n_query_instances=self.config["n_query_instances"],
-            batch_size=self.config["batch_size"],
-            n_epochs=self.config["n_epochs"],
-            seed=self.config["seed"],
-            **query_kwargs,
-        )
+        if train_base:
+            start = default_timer()
 
-        end = default_timer()
+            al_loop.train_base(model_name=name,
+                               batch_size=self.config["batch_size"],
+                               n_epochs=self.config["base_n_epochs"],
+                               seed=self.config["experiment_seed"])
 
-        if self.config["save_logs"]:
-            with open(pathlib.Path(path_logs, "config.pkl"), "wb") as f:
-                pickle.dump(self.config, f)
-            with open(pathlib.Path(path_logs, "al_logs.pkl"), "wb") as f:
-                pickle.dump(al_loop.al_logs, f)
-            with open(pathlib.Path(path_logs, "stats.txt"), "w") as f:
-                f.write(f"Elapsed time (s): {end - start}")
+            end = default_timer()
+
+        else:
+            start = default_timer()
+
+            al_loop.learn(
+                n_loops=self.config["n_loops"],
+                n_query_instances=self.config["n_query_instances"],
+                batch_size=self.config["batch_size"],
+                n_epochs=self.config["n_epochs"],
+                seed=self.config["experiment_seed"],
+                **query_kwargs,
+            )
+
+            end = default_timer()
+
+            if self.config["save_logs"]:
+                with open(pathlib.Path(path_logs, "config.pkl"), "wb") as f:
+                    pickle.dump(self.config, f)
+                with open(pathlib.Path(path_logs, "al_logs.pkl"), "wb") as f:
+                    pickle.dump(al_loop.al_logs, f)
+                with open(pathlib.Path(path_logs, "stats.txt"), "w") as f:
+                    f.write(f"Elapsed time (s): {end - start}")
