@@ -1,4 +1,5 @@
 import pathlib
+import datetime
 import pickle
 
 from timeit import default_timer
@@ -15,6 +16,8 @@ class Experiment:
     def run(self, name, query_strategy, train_base=False):
         self.config["name"] = name
         self.config["query_strategy"] = query_strategy
+
+        start_dt = datetime.datetime.now()
 
         print("CONFIGURATION:")
         for k, v in self.config.items():
@@ -109,7 +112,7 @@ class Experiment:
 
         # Initialize logging
         if self.config["save_logs"]:
-            path_logs = pathlib.Path("logs", name)
+            path_logs = pathlib.Path("logs", f"{name}_{start_dt.strftime('%Y%m%d_%H%M%S')}")
             path_logs.mkdir(parents=True, exist_ok=False)
         else:
             path_logs = None
@@ -124,7 +127,7 @@ class Experiment:
             target_size=target_size,
             class_sample_size_train=self.config["class_sample_size_train"],
             class_sample_size_test=self.config["class_sample_size_test"],
-            init_size=self.config["init_size"],
+            init_size=self.config["base_init_size"],
             val_size=self.config["val_size"],
             model_callbacks=callbacks,
             path_logs=path_logs,
@@ -150,6 +153,7 @@ class Experiment:
                 n_query_instances=self.config["n_query_instances"],
                 batch_size=self.config["batch_size"],
                 n_epochs=self.config["n_epochs"],
+                base_model_name=self.config["base_model_name"],
                 seed=self.config["experiment_seed"],
                 **query_kwargs,
             )
