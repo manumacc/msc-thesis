@@ -1,6 +1,7 @@
 import os
 import pathlib
 import random
+import pickle
 
 import numpy as np
 
@@ -356,6 +357,9 @@ class ActiveLearning:
         path_model = pathlib.Path("models", model_name)
         path_model.mkdir(parents=True, exist_ok=False)
         model.save_weights(pathlib.Path(path_model, model_name))
+
+        with open(pathlib.Path(path_model, "train_logs.pkl"), "wb") as f:
+            pickle.dump(logs, f)
 
     @staticmethod
     def _joint_shuffle(a, b, seed=0):
