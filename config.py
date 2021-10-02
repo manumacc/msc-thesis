@@ -53,7 +53,7 @@ config_dict = {
     "query_batch_size": 256,  # Batch size for unlabeled pool iterator
 
     # Base model
-    "base_model_name": "resnet-1",
+    "base_model_name": "",
 
     "base_init_size": 0.5,  # With respect to whole training set
 
@@ -65,7 +65,7 @@ config_dict = {
         "decay_early_stopping"
     ],
 
-    "base_decay_early_stopping_patience": 20,
+    "base_decay_early_stopping_patience": 50,
     "base_decay_early_stopping_times": 3,
     "base_decay_early_stopping_min_delta": 0.1,  # Empirically set for ResNet
     "base_decay_early_stopping_restore_best_weights": False,
