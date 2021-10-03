@@ -3,8 +3,8 @@ from tensorflow.keras import layers
 from tensorflow.keras import Model
 
 def ResNet50(n_classes,
-          input_shape=(224, 224, 3),
-          freeze_extractor=False):
+             input_shape=(224, 224, 3),
+             freeze_extractor=False):
 
     model_base = resnet50.ResNet50(
         include_top=False,
