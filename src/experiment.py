@@ -19,7 +19,7 @@ class Experiment:
 
         start_dt = datetime.datetime.now()
 
-        print("CONFIGURATION:")
+        print("Configuration:")
         for k, v in self.config.items():
             print(f"- {k} = {v}")
 
@@ -110,13 +110,6 @@ class Experiment:
                     "query_batch_size": self.config["query_batch_size"],
                 }
 
-        # Initialize logging
-        if self.config["save_logs"]:
-            path_logs = pathlib.Path("logs", f"{name}_{start_dt.strftime('%Y%m%d_%H%M%S')}")
-            path_logs.mkdir(parents=True, exist_ok=False)
-        else:
-            path_logs = None
-
         # Initialize active learning loop
         al_loop = al.ActiveLearning(
             path_train=self.config["data_path_train"],
@@ -130,40 +123,45 @@ class Experiment:
             init_size=self.config["base_init_size"],
             val_size=self.config["val_size"],
             model_callbacks=callbacks,
-            path_logs=path_logs,
             save_models=self.config["save_models"],
             dataset_seed=self.config["dataset_seed"],
         )
 
         if train_base:
             start = default_timer()
-
-            al_loop.train_base(model_name=name,
-                               batch_size=self.config["batch_size"],
-                               n_epochs=self.config["base_n_epochs"],
-                               seed=self.config["experiment_seed"])
-
+            logs = al_loop.train_base(
+                model_name=name,
+                batch_size=self.config["batch_size"],
+                n_epochs=self.config["base_n_epochs"],
+                seed=self.config["experiment_seed"],
+            )
             end = default_timer()
 
-        else:
-            start = default_timer()
+            with open(pathlib.Path("models", name, "logs.pkl"), "wb") as f:
+                pickle.dump(logs, f)
+            with open(pathlib.Path("models", name, "stats.txt"), "w") as f:
+                f.write(f"Elapsed time (s): {end - start}")
 
-            al_loop.learn(
+        else:
+            dir_logs = f"{name}_{start_dt.strftime('%Y%m%d_%H%M%S')}"
+
+            start = default_timer()
+            logs = al_loop.learn(
                 n_loops=self.config["n_loops"],
                 n_query_instances=self.config["n_query_instances"],
                 batch_size=self.config["batch_size"],
                 n_epochs=self.config["n_epochs"],
                 base_model_name=self.config["base_model_name"],
+                dir_logs=dir_logs,
                 seed=self.config["experiment_seed"],
                 **query_kwargs,
             )
-
             end = default_timer()
 
-            if self.config["save_logs"]:
-                with open(pathlib.Path(path_logs, "config.pkl"), "wb") as f:
-                    pickle.dump(self.config, f)
-                with open(pathlib.Path(path_logs, "al_logs.pkl"), "wb") as f:
-                    pickle.dump(al_loop.al_logs, f)
-                with open(pathlib.Path(path_logs, "stats.txt"), "w") as f:
-                    f.write(f"Elapsed time (s): {end - start}")
+            path_logs = pathlib.Path("logs", dir_logs)
+            with open(pathlib.Path(path_logs, "config.pkl"), "wb") as f:
+                pickle.dump(self.config, f)
+            with open(pathlib.Path(path_logs, "logs.pkl"), "wb") as f:
+                pickle.dump(logs, f)
+            with open(pathlib.Path(path_logs, "stats.txt"), "w") as f:
+                f.write(f"Elapsed time (s): {end - start}")

@@ -23,7 +23,6 @@ class ActiveLearning:
                  init_size,
                  val_size,
                  model_callbacks=None,
-                 path_logs=None,
                  save_models=False,
                  dataset_seed=None):
         self.query_strategy = query_strategy
@@ -46,13 +45,7 @@ class ActiveLearning:
         self.idx_queried_last = None
         self.idx_queried = np.array([], dtype=int)
 
-        if path_logs:
-            self.save_logs = True
-            self.save_models = save_models
-            self.path_logs = path_logs
-            self.al_logs = {"train": [], "test": []}
-        else:
-            self.save_logs = False
+        self.save_models = save_models
 
     def load_data_from_directory(self, path, sample_size, seed=None):
         """
@@ -234,6 +227,7 @@ class ActiveLearning:
               batch_size,
               n_epochs,
               base_model_name,
+              dir_logs=None,
               seed=None,
               **query_kwargs):
         """Runs active learning loops.
@@ -244,9 +238,13 @@ class ActiveLearning:
             batch_size: Batch size for model fit and evaluation
             n_epochs: Number of epochs for model fit
             base_model_name:
+            dir_logs:
             seed: Reproducibility for query strategy
             **query_kwargs: Query strategy kwargs
         """
+
+        logs = {"train": [], "test": []}
+        pathlib.Path("logs", dir_logs).mkdir(parents=True, exist_ok=False)
 
         print("Total dataset size:", len(self.X_train_init) + len(self.X_pool))
 
@@ -265,12 +263,11 @@ class ActiveLearning:
                 print("Optimizer configuration")
                 print(optimizer.get_config())
 
-                print("Compiling model")
                 self.model.compile(optimizer=optimizer,
                                    loss=loss_fn,
                                    metrics=["accuracy"])
 
-                print("Setting weights to last available weights")
+                print("Setting weights to last iteration weights")
                 self.model.set_weights(self.model_weights_checkpoint)
 
             X_pool, idx_pool, metadata = self.get_pool(preprocess=False, get_metadata=True)
@@ -278,7 +275,6 @@ class ActiveLearning:
             idx_query = self.query(X_pool, metadata, n_query_instances, seed=seed, **query_kwargs)
             print(f"Queried {len(idx_query)} samples.")
             self.add_to_train(idx_pool[idx_query])
-            print("Deleting pool")
             del X_pool, idx_query
 
             X_train, y_train = self.get_train(preprocess=True, seed=seed)
@@ -291,24 +287,20 @@ class ActiveLearning:
                                      epochs=n_epochs,
                                      shuffle=True,
                                      callbacks=self.model_callbacks)
-
-            if self.save_logs:
-                self.al_logs["train"].append(history.history)
+            logs["train"].append(history.history)
+            del X_train, y_train
 
             if self.save_models:
                 print("Saving model")
-                self.model.save(pathlib.Path(self.path_logs, f"model_iter_{i+1}"))
-
-            print("Deleting training set")
-            del X_train, y_train
+                self.model.save(pathlib.Path("logs", dir_logs, f"model_iter_{i+1}"))
 
             print("Evaluating model")
             test_metrics = self.model.evaluate(X_test, y_test, batch_size=batch_size)
-
-            if self.save_logs:
-                self.al_logs["test"].append(test_metrics)
+            logs["test"].append(test_metrics)
 
             self.model_weights_checkpoint = self.model.get_weights()
+
+        return logs
 
     def train_base(self,
                    model_name,
@@ -340,26 +332,22 @@ class ActiveLearning:
                             epochs=n_epochs,
                             shuffle=True,
                             callbacks=self.model_callbacks)
+        logs["train"].append(history.history)
         del X_train, y_train
-
-        if self.save_logs:
-            logs["train"].append(history.history)
 
         X_test, y_test = self.get_test()
         print("Evaluating model")
         test_metrics = model.evaluate(X_test, y_test, batch_size=batch_size)
         del X_test, y_test
 
-        if self.save_logs:
-            logs["test"] = test_metrics
+        logs["test"] = test_metrics
 
         print("Saving base model weights")
         path_model = pathlib.Path("models", model_name)
         path_model.mkdir(parents=True, exist_ok=False)
         model.save_weights(pathlib.Path(path_model, model_name))
 
-        with open(pathlib.Path(path_model, "train_logs.pkl"), "wb") as f:
-            pickle.dump(logs, f)
+        return logs
 
     @staticmethod
     def _joint_shuffle(a, b, seed=0):
