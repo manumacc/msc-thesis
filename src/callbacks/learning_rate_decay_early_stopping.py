@@ -90,6 +90,11 @@ class LearningRateDecayEarlyStopping(Callback):
         if self.stopped_epoch > 0 and self.verbose > 0:
             print(f"Epoch {self.stopped_epoch + 1}: early stopping")
 
+        if self.restore_best_weights and self.best_weights is not None:
+            if self.verbose > 0:
+                print('Restoring model weights from the end of the best epoch.')
+            self.model.set_weights(self.best_weights)
+
     def get_monitor_value(self, logs):
         logs = logs or {}
         monitor_value = logs.get(self.monitor)
