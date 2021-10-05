@@ -1,6 +1,5 @@
 config_dict = {
     ## Logging
-    "save_logs": True,
     "save_models": False,
 
     ## Seed
@@ -32,7 +31,7 @@ config_dict = {
     ## Active learning
     "n_loops": 10,
 
-    "val_size": 0.1,  # With respect to current training set
+    "val_size": 0.1,  # With respect to initial training subset
 
     "lr_init": 0.01,  # VGG16: 1e-2; ResNet: 0.1
     "momentum": 0.9,
@@ -45,18 +44,18 @@ config_dict = {
 
     "decay_early_stopping_patience": 10,
     "decay_early_stopping_times": 3,
-    "decay_early_stopping_min_delta": 0.1,  # Empirically set for ResNet
-    "decay_early_stopping_restore_best_weights": False,
+    "decay_early_stopping_min_delta": 0.01,  # Empirically set for ResNet in AL loop
+    "decay_early_stopping_restore_best_weights": True,
 
     # Query strategy arguments
     "n_query_instances": 256,  # Number of instances to add at each iteration
     "query_batch_size": 256,  # Batch size for unlabeled pool iterator
 
-    # Base model
+    ## Base model
     "base_model_name": "",
+    "base_init_size": 0.2,  # With respect to whole training set
 
-    "base_init_size": 0.5,  # With respect to whole training set
-
+    # Base model training
     "base_lr_init": 0.1,
     "base_weight_decay": 1e-4,
     "base_n_epochs": 1000,

@@ -29,15 +29,25 @@ class Experiment:
             if self.config["model"] == "VGG16":
                 from network.vgg16 import VGG16
                 print("Instantiating VGG16 model")
-                model = VGG16(n_classes=self.config["n_classes"],
-                              dropout_rate=self.config["fc_dropout_rate"],
-                              dense_units=self.config["dense_units"],
-                              freeze_extractor=self.config["freeze_extractor"])
+                model = VGG16(
+                    n_classes=self.config["n_classes"],
+                    dropout_rate=self.config["fc_dropout_rate"],
+                    dense_units=self.config["dense_units"],
+                    freeze_extractor=self.config["freeze_extractor"]
+                )
             if self.config["model"] == "ResNet50":
                 from network.resnet50 import ResNet50
                 print("Instantiating ResNet50 model")
-                model = ResNet50(n_classes=self.config["n_classes"],
-                                 freeze_extractor=self.config["freeze_extractor"])
+                model = ResNet50(
+                    n_classes=self.config["n_classes"],
+                    freeze_extractor=self.config["freeze_extractor"]
+                )
+            if self.config["model"] == "SimpleCNN":
+                from network.simplecnn import SimpleCNN
+                print("Instantiating SimpleCNN model")
+                model = SimpleCNN(
+                    n_classes=self.config["n_classes"]
+                )
 
             loss_fn = None
             if self.config["loss"] == "categorical_crossentropy":
@@ -45,9 +55,16 @@ class Experiment:
 
             optimizer = None
             if self.config["optimizer"] == "SGDW":
-                optimizer = tfa.optimizers.SGDW(learning_rate=self.config["lr_init"] if not base else self.config["base_lr_init"],
-                                                momentum=self.config["momentum"],
-                                                weight_decay=self.config["weight_decay"] if not base else self.config["base_weight_decay"])
+                optimizer = tfa.optimizers.SGDW(
+                    learning_rate=self.config["lr_init"] if not base else self.config["base_lr_init"],
+                    momentum=self.config["momentum"],
+                    weight_decay=self.config["weight_decay"] if not base else self.config["base_weight_decay"]
+                )
+            if self.config["optimizer"] == "SGD":
+                optimizer = tf.keras.optimizers.SGD(
+                    learning_rate=self.config["lr_init"] if not base else self.config["base_lr_init"],
+                    momentum=self.config["momentum"],
+                )
 
             return model, loss_fn, optimizer
 
@@ -61,32 +78,13 @@ class Experiment:
         if self.config["model"] == "ResNet50":
             preprocess_fn = tf.keras.applications.resnet50.preprocess_input
             target_size = (224, 224)
+        if self.config["model"] == "SimpleCNN":
+            preprocess_fn = lambda x: x / x.max()
+            target_size = (32, 32)
 
-        callbacks = []
         query_strategy = None
         query_kwargs = {}
-
-        if train_base:
-            if "decay_early_stopping" in self.config["base_callbacks"]:
-                from callbacks.learning_rate_decay_early_stopping import LearningRateDecayEarlyStopping
-                callback = LearningRateDecayEarlyStopping(patience=self.config["base_decay_early_stopping_patience"],
-                                                          n_decay=self.config["base_decay_early_stopping_times"],
-                                                          min_delta=self.config["base_decay_early_stopping_min_delta"],
-                                                          restore_best_weights=self.config["base_decay_early_stopping_restore_best_weights"],
-                                                          verbose=1)
-                callbacks.append(callback)
-
-        else:
-            if "decay_early_stopping" in self.config["callbacks"]:
-                from callbacks.learning_rate_decay_early_stopping import LearningRateDecayEarlyStopping
-                callback = LearningRateDecayEarlyStopping(patience=self.config["decay_early_stopping_patience"],
-                                                          n_decay=self.config["decay_early_stopping_times"],
-                                                          min_delta=self.config["decay_early_stopping_min_delta"],
-                                                          restore_best_weights=self.config[
-                                                              "decay_early_stopping_restore_best_weights"],
-                                                          verbose=1)
-                callbacks.append(callback)
-
+        if not train_base:
             # Query strategy
             if self.config["query_strategy"] == "random":
                 from query.random import RandomQueryStrategy
@@ -122,17 +120,29 @@ class Experiment:
             class_sample_size_test=self.config["class_sample_size_test"],
             init_size=self.config["base_init_size"],
             val_size=self.config["val_size"],
-            model_callbacks=callbacks,
             save_models=self.config["save_models"],
             dataset_seed=self.config["dataset_seed"],
         )
 
         if train_base:
+            callbacks = []
+            if "decay_early_stopping" in self.config["base_callbacks"]:
+                from callbacks.learning_rate_decay_early_stopping import LearningRateDecayEarlyStopping
+                callback = LearningRateDecayEarlyStopping(
+                    patience=self.config["base_decay_early_stopping_patience"],
+                    n_decay=self.config["base_decay_early_stopping_times"],
+                    min_delta=self.config["base_decay_early_stopping_min_delta"],
+                    restore_best_weights=self.config["base_decay_early_stopping_restore_best_weights"],
+                    verbose=1
+                )
+                callbacks.append(callback)
+
             start = default_timer()
             logs = al_loop.train_base(
                 model_name=name,
                 batch_size=self.config["batch_size"],
                 n_epochs=self.config["base_n_epochs"],
+                callbacks=callbacks,
                 seed=self.config["experiment_seed"],
             )
             end = default_timer()
@@ -143,6 +153,18 @@ class Experiment:
                 f.write(f"Elapsed time (s): {end - start}")
 
         else:
+            callbacks = []
+            if "decay_early_stopping" in self.config["callbacks"]:
+                from callbacks.learning_rate_decay_early_stopping import LearningRateDecayEarlyStopping
+                callback = LearningRateDecayEarlyStopping(
+                    patience=self.config["decay_early_stopping_patience"],
+                    n_decay=self.config["decay_early_stopping_times"],
+                    min_delta=self.config["decay_early_stopping_min_delta"],
+                    restore_best_weights=self.config["decay_early_stopping_restore_best_weights"],
+                    verbose=1
+                )
+                callbacks.append(callback)
+
             dir_logs = f"{name}_{start_dt.strftime('%Y%m%d_%H%M%S')}"
 
             start = default_timer()
@@ -151,6 +173,7 @@ class Experiment:
                 n_query_instances=self.config["n_query_instances"],
                 batch_size=self.config["batch_size"],
                 n_epochs=self.config["n_epochs"],
+                callbacks=callbacks,
                 base_model_name=self.config["base_model_name"],
                 dir_logs=dir_logs,
                 seed=self.config["experiment_seed"],
