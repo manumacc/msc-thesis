@@ -60,10 +60,10 @@ class Experiment:
                     momentum=self.config["momentum"],
                     weight_decay=self.config["weight_decay"] if not base else self.config["base_weight_decay"]
                 )
-            if self.config["optimizer"] == "SGD":
-                optimizer = tf.keras.optimizers.SGD(
+            if self.config["optimizer"] == "RMSprop":
+                optimizer = tf.keras.optimizers.RMSprop(
                     learning_rate=self.config["lr_init"] if not base else self.config["base_lr_init"],
-                    momentum=self.config["momentum"],
+                    decay=self.config["weight_decay"] if not base else self.config["base_weight_decay"]
                 )
 
             return model, loss_fn, optimizer
