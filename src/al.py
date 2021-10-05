@@ -22,7 +22,6 @@ class ActiveLearning:
                  class_sample_size_test,
                  init_size,
                  val_size,
-                 model_callbacks=None,
                  save_models=False,
                  dataset_seed=None):
         self.query_strategy = query_strategy
@@ -30,7 +29,6 @@ class ActiveLearning:
         self.model = None
         self.model_weights_checkpoint = None
         self.model_initialization_fn = model_initialization_fn
-        self.model_callbacks = model_callbacks if model_callbacks else []
 
         self.preprocess_input_fn = preprocess_input_fn
         self.target_size = target_size
@@ -38,7 +36,7 @@ class ActiveLearning:
         self.init_size = init_size
         self.val_size = val_size
 
-        self.X_train_init, self.y_train_init, self.X_pool, self.y_pool, self.X_test, self.y_test, self.classes = (
+        self.X_train_init, self.y_train_init, self.X_val, self.y_val, self.X_pool, self.y_pool, self.X_test, self.y_test, self.classes = (
             self.initialize_dataset(path_train, path_test, class_sample_size_train, class_sample_size_test, seed=dataset_seed)
         )
 
@@ -112,19 +110,29 @@ class ActiveLearning:
                            class_sample_size_train,
                            class_sample_size_test,
                            seed=None):
-        """Initialize initial training set, unlabeled pool and test set."""
+        """Initialize initial training set, validation set, unlabeled pool and
+        test set.
+        """
 
-        # Training set and unlabeled pool
+        # Training set, validation set and unlabeled pool
         X, y, cls_train = self.load_data_from_directory(path_train, class_sample_size_train, seed=seed)
 
         self._joint_shuffle(X, y, seed=seed)
 
         init_bound = int(len(X) * self.init_size)
-        X_train_init, y_train_init = X[:init_bound], y[:init_bound]
+        X_train, y_train = X[:init_bound], y[:init_bound]
         X_pool, y_pool = X[init_bound:], y[init_bound:]
 
+        val_bound = int(len(X_train) * self.val_size)
+        X_val, y_val = X_train[:val_bound], y_train[:val_bound]
+        X_train_init, y_train_init = X_train[val_bound:], y_train[val_bound:]
+
         print(f"Length of initial training set: {len(X_train_init)}")
-        print(f"Length of pool dataset: {len(X_pool)}")
+        print(f"Length of validation set: {len(X_val)}")
+        print(f"Length of pool set: {len(X_pool)}")
+
+        # Make sure each set contains at least 1 element of each class
+        assert len(np.unique(y_train_init, axis=0)) == len(np.unique(y_val, axis=0)) == len(np.unique(y_pool, axis=0)) == len(cls_train)
 
         # Test set
         X_test, y_test, cls_test = self.load_data_from_directory(path_test, class_sample_size_test, seed=seed)
@@ -134,7 +142,7 @@ class ActiveLearning:
 
         print(f"Length of test dataset: {len(X_test)}")
 
-        return X_train_init, y_train_init, X_pool, y_pool, X_test, y_test, cls_train
+        return X_train_init, y_train_init, X_val, y_val, X_pool, y_pool, X_test, y_test, cls_train
 
     def initialize_base_model(self, model_name):
         self.model, loss_fn, optimizer = self.model_initialization_fn()
@@ -154,8 +162,8 @@ class ActiveLearning:
     def get_train(self, preprocess=True, seed=None):
         """Get current training dataset along with the validation set."""
 
-        print("Getting current training")
-        print("Concatenating X_train_init and labeled pool (may cause OOM)")
+        print("Getting current training set")
+        print("Concatenating X_train_init and labeled pool")
         X_train = np.concatenate([self.X_train_init, self.X_pool[self.idx_queried]])
         y_train = np.concatenate([self.y_train_init, self.y_pool[self.idx_queried]])
         print(f"Shape of current train: {X_train.shape} labels {y_train.shape}")
@@ -170,10 +178,20 @@ class ActiveLearning:
 
         return X_train, y_train
 
+    def get_val(self, preprocess=True):
+        X_val = np.copy(self.X_val)
+        y_val = np.copy(self.y_val)
+
+        if preprocess:
+            print("Preprocessing val dataset")
+            X_val = self._prepare_dataset(X_val)
+
+        return X_val, y_val
+
     def get_pool(self, preprocess=True, get_metadata=False):
         """Get current unlabeled pool"""
 
-        print("Getting current pool (may cause OOM)")
+        print("Getting current pool")
         X_pool = np.delete(self.X_pool, self.idx_queried, axis=0)
         idx_pool = np.delete(np.arange(0, len(self.X_pool)), self.idx_queried)
         print(f"Size of current pool: {X_pool.shape}")
@@ -193,16 +211,18 @@ class ActiveLearning:
             return X_pool, idx_pool
 
     def get_test(self, preprocess=True):
-        # WARNING: must only be run once (since prepare dataset overwrites its argument)
+        X_test = np.copy(self.X_test)
+        y_test = np.copy(self.y_test)
+
         if preprocess:
             print("Preprocessing test dataset")
-            self.X_test = self._prepare_dataset(self.X_test)
+            X_test = self._prepare_dataset(X_test)
 
-        return self.X_test, self.y_test
+        return X_test, y_test
 
     def _prepare_dataset(self, X, preprocess=True):
         if preprocess:
-            X = self.preprocess_input_fn(X)  # Note: this overwrites X
+            X = self.preprocess_input_fn(X)  # This overwrites X
 
         return X
 
@@ -226,6 +246,7 @@ class ActiveLearning:
               n_query_instances,
               batch_size,
               n_epochs,
+              callbacks,
               base_model_name,
               dir_logs=None,
               seed=None,
@@ -237,6 +258,7 @@ class ActiveLearning:
             n_query_instances: Number of instances to query at each iteration
             batch_size: Batch size for model fit and evaluation
             n_epochs: Number of epochs for model fit
+            callbacks:
             base_model_name:
             dir_logs:
             seed: Reproducibility for query strategy
@@ -249,6 +271,9 @@ class ActiveLearning:
         print("Total dataset size:", len(self.X_train_init) + len(self.X_pool))
 
         X_test, y_test = self.get_test()
+        X_val, y_val = self.get_val()
+        print("Composition of validation set:")
+        print(np.unique(self._one_hot_decode(y_val), return_counts=True))
 
         print("Initializing base model")
         self.initialize_base_model(base_model_name)
@@ -282,11 +307,11 @@ class ActiveLearning:
             print(np.unique(self._one_hot_decode(y_train), return_counts=True))
             print("Fitting model")
             history = self.model.fit(X_train, y_train,
-                                     validation_split=self.val_size,
+                                     validation_data=(X_val, y_val),
                                      batch_size=batch_size,
                                      epochs=n_epochs,
                                      shuffle=True,
-                                     callbacks=self.model_callbacks)
+                                     callbacks=callbacks)
             logs["train"].append(history.history)
             del X_train, y_train
 
@@ -306,6 +331,7 @@ class ActiveLearning:
                    model_name,
                    batch_size,
                    n_epochs,
+                   callbacks,
                    seed=None):
         """Train and save base model"""
 
@@ -322,16 +348,17 @@ class ActiveLearning:
                       metrics=["accuracy"])
 
         X_train, y_train = self.get_train(preprocess=True, seed=seed)
+        X_val, y_val = self.get_val()
         print("Composition of initial training set:")
         print(np.unique(self._one_hot_decode(y_train), return_counts=True))
 
         print("Fitting base model")
         history = model.fit(X_train, y_train,
-                            validation_split=self.val_size,
+                            validation_data=(X_val, y_val),
                             batch_size=batch_size,
                             epochs=n_epochs,
                             shuffle=True,
-                            callbacks=self.model_callbacks)
+                            callbacks=callbacks)
         logs["train"].append(history.history)
         del X_train, y_train
 
