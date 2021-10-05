@@ -1,9 +1,9 @@
 import os
 import pathlib
 import random
-import pickle
 
 import numpy as np
+from tensorflow.keras.datasets import cifar10
 
 from PIL import Image
 
@@ -22,6 +22,7 @@ class ActiveLearning:
                  class_sample_size_test,
                  init_size,
                  val_size,
+                 builtin_dataset=None,
                  save_models=False,
                  dataset_seed=None):
         self.query_strategy = query_strategy
@@ -36,9 +37,14 @@ class ActiveLearning:
         self.init_size = init_size
         self.val_size = val_size
 
-        self.X_train_init, self.y_train_init, self.X_val, self.y_val, self.X_pool, self.y_pool, self.X_test, self.y_test, self.classes = (
-            self.initialize_dataset(path_train, path_test, class_sample_size_train, class_sample_size_test, seed=dataset_seed)
-        )
+        if builtin_dataset:
+            self.X_train_init, self.y_train_init, self.X_val, self.y_val, self.X_pool, self.y_pool, self.X_test, self.y_test = (
+                self.initialize_builtin_dataset(builtin_dataset, seed=dataset_seed)
+            )
+        else:
+            self.X_train_init, self.y_train_init, self.X_val, self.y_val, self.X_pool, self.y_pool, self.X_test, self.y_test = (
+                self.initialize_dataset(path_train, path_test, class_sample_size_train, class_sample_size_test, seed=dataset_seed)
+            )
 
         self.idx_queried_last = None
         self.idx_queried = np.array([], dtype=int)
@@ -142,7 +148,36 @@ class ActiveLearning:
 
         print(f"Length of test dataset: {len(X_test)}")
 
-        return X_train_init, y_train_init, X_val, y_val, X_pool, y_pool, X_test, y_test, cls_train
+        return X_train_init, y_train_init, X_val, y_val, X_pool, y_pool, X_test, y_test
+
+    def initialize_builtin_dataset(self, dataset_name, seed=None):
+        if dataset_name == "cifar-10":
+            (X, y), (X_test, y_test) = cifar10.load_data()
+            y = self._one_hot_encode(y)
+            y_test = self._one_hot_encode(y_test)
+        else:
+            raise ValueError(f"No dataset with name {dataset_name} found")
+
+        self._joint_shuffle(X, y, seed=seed)
+
+        init_bound = int(len(X) * self.init_size)
+        X_train, y_train = X[:init_bound], y[:init_bound]
+        X_pool, y_pool = X[init_bound:], y[init_bound:]
+
+        val_bound = int(len(X_train) * self.val_size)
+        X_val, y_val = X_train[:val_bound], y_train[:val_bound]
+        X_train_init, y_train_init = X_train[val_bound:], y_train[val_bound:]
+
+        print(f"Length of initial training set: {len(X_train_init)}")
+        print(f"Length of validation set: {len(X_val)}")
+        print(f"Length of pool set: {len(X_pool)}")
+
+        # Make sure each set contains at least 1 element of each class
+        assert len(np.unique(y_train_init, axis=0)) == len(np.unique(y_val, axis=0)) == len(np.unique(y_pool, axis=0))
+
+        print(f"Length of test dataset: {len(X_test)}")
+
+        return X_train_init, y_train_init, X_val, y_val, X_pool, y_pool, X_test, y_test
 
     def initialize_base_model(self, model_name):
         self.model, loss_fn, optimizer = self.model_initialization_fn()
@@ -406,6 +441,8 @@ class ActiveLearning:
 
     @staticmethod
     def _one_hot_encode(y):
+        y = y.squeeze()
+
         if y.ndim != 1:
             raise ValueError(f"Unsupported shape: {y.shape}")
 

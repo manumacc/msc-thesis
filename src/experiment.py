@@ -120,6 +120,7 @@ class Experiment:
             class_sample_size_test=self.config["class_sample_size_test"],
             init_size=self.config["base_init_size"],
             val_size=self.config["val_size"],
+            builtin_dataset=self.config["builtin_dataset"],
             save_models=self.config["save_models"],
             dataset_seed=self.config["dataset_seed"],
         )
