@@ -7,22 +7,26 @@ config_dict = {
     "experiment_seed": 42,
 
     ## Dataset
-    "data_path_train": "data/imagenette2/train",
-    "data_path_test": "data/imagenette2/val",
-
     "n_classes": 10,
 
+    # Built-in dataset name
+    "builtin_dataset": None,  # "cifar-10"
+
+    # If builtin_dataset is None, accept data from directory
+    "data_path_train": "data/imagenette2/train",
+    "data_path_test": "data/imagenette2/val",
     "class_sample_size_train": 800,
     "class_sample_size_test": 300,
 
     ## Model
-    "model": "ResNet50",
-    "freeze_extractor": False,  # if True, load ImageNet weights for feature extractor
+    "model": "",  # SimpleCNN; ResNet50; VGG16
 
-    "optimizer": "SGDW",
+    "freeze_extractor": False,  # if True, load ImageNet weights for feature extractor (where available)
+
+    "optimizer": "SGDW",  # SGDW; RMSprop
     "loss": "categorical_crossentropy",
 
-    "batch_size": 256,
+    "batch_size": 128,
 
     # VGG16
     "fc_dropout_rate": 0.5,
@@ -33,9 +37,9 @@ config_dict = {
 
     "val_size": 0.1,  # With respect to initial training subset
 
-    "lr_init": 0.01,  # VGG16: 1e-2; ResNet: 0.1
+    "lr_init": 0.01,  # VGG16: 1e-2; ResNet: 0.1; SimpleCNN w/ RMSprop 0.0001
     "momentum": 0.9,
-    "weight_decay": 1e-4,  # VGG16: 5e-4; ResNet: 1e-4
+    "weight_decay": 1e-6,  # VGG16: 5e-4; ResNet: 1e-4; SimpleCNN w/ RMSprop 1e-6
     "n_epochs": 100,
 
     "callbacks": [
@@ -49,7 +53,7 @@ config_dict = {
 
     # Query strategy arguments
     "n_query_instances": 256,  # Number of instances to add at each iteration
-    "query_batch_size": 256,  # Batch size for unlabeled pool iterator
+    "query_batch_size": 128,  # Batch size for unlabeled pool iterator
 
     ## Base model
     "base_model_name": "",
