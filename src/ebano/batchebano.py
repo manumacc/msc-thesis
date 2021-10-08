@@ -161,15 +161,27 @@ class Explainer:
                 for mask_i in range(X_masks.shape[1]):  # Iterate over masks
                     X_masks[i, mask_i] = (feature_maps[i, X_masks_map[mask_i]] == X_masks_labels[mask_i]) * 255
 
-        return X_masks, X_masks_map, X_masks_labels
+        return X_masks, X_masks_map
 
-    def perturb(self, X, X_masks):
+    def perturb(self, X, X_masks, inverse=False):
+        """
+        Perturbs original images, given an array of perturbation masks.
+        If inverse is True, perturbs each feature individually. Otherwise,
+        perturb the whole image except the masked feature.
+        """
+
         with Profiling("Perturb images"):
             X_perturbed = np.empty((len(X) * X_masks.shape[1], *self.input_shape, 3))
 
             # The i-th element indicates the index of the original image (located inside
             # the array X) corresponding to the i-th element of X_perturbed
             X_perturbed_origin_map = np.empty((len(X) * X_masks.shape[1]))
+
+            if inverse:
+                X_masks_inverse = np.copy(X_masks)
+                X_masks_inverse[X_masks == 255] = 0
+                X_masks_inverse[X_masks == 0] = 255
+                X_masks = X_masks_inverse
 
             for i, x in enumerate(X):
                 x_pil = ndarray_to_pil(x)
@@ -383,7 +395,7 @@ class Explainer:
                                                  batch_size=cluster_batch_size)
         del hc
 
-        X_masks, X_masks_map, X_masks_labels = self.generate_perturbation_masks(X, feature_maps, min_features=min_features)
+        X_masks, X_masks_map = self.generate_perturbation_masks(X, feature_maps, min_features=min_features)
         del feature_maps
 
         X_perturbed, X_perturbed_origin_map = self.perturb(X, X_masks)
@@ -407,6 +419,37 @@ class Explainer:
                     mask = X_masks_map == k_best
                     image_i = utils.ndarray_to_pil(X[i])
                     self.explain_visual(image_i, cois[i], X_masks[i][mask], nPIR[i][mask], nPIRP[i][mask])
+
+        # Fetch data for analysis
+        # Returns (list of dicts):
+        #   X_original (ndarray (x, y, n_channels)): original image
+        #   truth (int): ground truth class
+        #   preds (ndarray (n_classes)): predictions of original image (output of softmax)
+        #   best_n_features (int): number of clusters of best explanation
+        #   X_masks (): masks of features associated to best explanation
+        #   X_perturbed: perturbed images associated to the best explanation (inverse=False)
+        #   preds_perturbed: predictions for each perturbed image
+        #   nPIR_best, nPIRP_best: indices of best explanation
+        results = []
+
+        X_perturbed = X_perturbed.reshape((len(X), len(X_masks_map), -1))
+
+        for i in range(len(X)):
+            best_mask = X_masks_map == best[i]
+
+            results.append({
+                "X_original": X[i],
+                "truth": y[i],
+                "preds": preds_original[i],
+                "best_n_features": best[i]+min_features,
+                "X_masks": X_masks[i][best_mask],
+                "X_perturbed": X_perturbed[i][best_mask],
+                "preds_perturbed": preds_perturbed[i][best_mask],
+                "nPIR_best": nPIR[i][best_mask],
+                "nPIRP_best": nPIRP[i][best_mask],
+            })
+
+        return results
 
     @staticmethod
     def softsign(x):
