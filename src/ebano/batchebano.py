@@ -363,6 +363,7 @@ class Explainer:
                   cluster_max_iter=300,
                   cluster_batch_size=1000,
                   display_plots=True,
+                  return_results=False,
                   seed=None):
         """Fit explainer to a batch of images.
 
@@ -380,6 +381,7 @@ class Explainer:
             cluster_batch_size:
             display_plots: If True, create and display visual explanations.
                 Otherwise, only compute indices.
+            return_results:
             seed: Seed for reproducibility.
         """
 
@@ -420,34 +422,36 @@ class Explainer:
                     image_i = utils.ndarray_to_pil(X[i])
                     self.explain_visual(image_i, cois[i], X_masks[i][mask], nPIR[i][mask], nPIRP[i][mask])
 
-        # Fetch data for analysis
-        # Returns (list of dicts):
-        #   X_original (ndarray (x, y, n_channels)): original image
-        #   truth (int): ground truth class
-        #   preds (ndarray (n_classes)): predictions of original image (output of softmax)
-        #   best_n_features (int): number of clusters of best explanation
-        #   X_masks (): masks of features associated to best explanation
-        #   X_perturbed: perturbed images associated to the best explanation (inverse=False)
-        #   preds_perturbed: predictions for each perturbed image
-        #   nPIR_best, nPIRP_best: indices of best explanation
-        results = []
+        results = [None]
+        if return_results:
+            # Fetch data for analysis
+            # Returns (list of dicts):
+            #   X_original (ndarray (x, y, n_channels)): original image
+            #   truth (int): ground truth class
+            #   preds (ndarray (n_classes)): predictions of original image (output of softmax)
+            #   best_n_features (int): number of clusters of best explanation
+            #   X_masks (): masks of features associated to best explanation
+            #   X_perturbed: perturbed images associated to the best explanation (inverse=False)
+            #   preds_perturbed: predictions for each perturbed image
+            #   nPIR_best, nPIRP_best: indices of best explanation
+            results = []
 
-        X_perturbed = X_perturbed.reshape((len(X), len(X_masks_map), -1))
+            X_perturbed = X_perturbed.reshape((len(X), len(X_masks_map), -1))
 
-        for i in range(len(X)):
-            best_mask = X_masks_map == best[i]
+            for i in range(len(X)):
+                best_mask = X_masks_map == best[i]
 
-            results.append({
-                "X_original": X[i],
-                "truth": y[i],
-                "preds": preds_original[i],
-                "best_n_features": best[i]+min_features,
-                "X_masks": X_masks[i][best_mask],
-                "X_perturbed": X_perturbed[i][best_mask],
-                "preds_perturbed": preds_perturbed[i][best_mask],
-                "nPIR_best": nPIR[i][best_mask],
-                "nPIRP_best": nPIRP[i][best_mask],
-            })
+                results.append({
+                    "X_original": X[i],
+                    "truth": y[i],
+                    "preds": preds_original[i],
+                    "best_n_features": best[i]+min_features,
+                    "X_masks": X_masks[i][best_mask],
+                    "X_perturbed": X_perturbed[i][best_mask],
+                    "preds_perturbed": preds_perturbed[i][best_mask],
+                    "nPIR_best": nPIR[i][best_mask],
+                    "nPIRP_best": nPIRP[i][best_mask],
+                })
 
         return results
 
