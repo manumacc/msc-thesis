@@ -3,7 +3,7 @@ Create an ImageNet subset of specified size containing only specified
 classes. Save as pickle containing numpy arrays X, y.
 """
 
-import pickle as pkl
+import pickle
 import numpy as np
 import tensorflow as tf
 import tensorflow_datasets as tfds
