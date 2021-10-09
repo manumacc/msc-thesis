@@ -430,9 +430,7 @@ class Explainer:
             #   truth (int): ground truth class
             #   preds (ndarray (n_classes)): predictions of original image (output of softmax)
             #   best_n_features (int): number of clusters of best explanation
-            #   X_masks (): masks of features associated to best explanation
-            #   X_perturbed: perturbed images associated to the best explanation (inverse=False)
-            #   preds_perturbed: predictions for each perturbed image
+            #   X_masks (ndarray (n_masks, x, y)): masks of features associated to best explanation
             #   nPIR_best, nPIRP_best: indices of best explanation
             results = []
 
@@ -447,8 +445,6 @@ class Explainer:
                     "preds": preds_original[i],
                     "best_n_features": best[i]+min_features,
                     "X_masks": X_masks[i][best_mask],
-                    "X_perturbed": X_perturbed[i][best_mask],
-                    "preds_perturbed": preds_perturbed[i][best_mask],
                     "nPIR_best": nPIR[i][best_mask],
                     "nPIRP_best": nPIRP[i][best_mask],
                 })
