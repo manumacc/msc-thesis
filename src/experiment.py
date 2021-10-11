@@ -165,6 +165,15 @@ class Experiment:
                     verbose=1
                 )
                 callbacks.append(callback)
+            if "lr_scheduler" in self.config["callbacks"]:
+                def lr_scheduler(epoch, lr):
+                    if epoch < self.config["lr_scheduler_epoch"]:
+                        return lr
+                    else:
+                        return lr * self.config["lr_scheduler_multiplier"]
+
+                callback = tf.keras.callbacks.LearningRateScheduler(lr_scheduler, verbose=1)
+                callbacks.append(callback)
 
             dir_logs = f"{name}_{start_dt.strftime('%Y%m%d_%H%M%S')}"
 

@@ -40,23 +40,28 @@ config_dict = {
     "lr_init": 0.01,  # VGG16: 1e-2; ResNet: 0.1; SimpleCNN w/ RMSprop 0.0001
     "momentum": 0.9,
     "weight_decay": 1e-6,  # VGG16: 5e-4; ResNet: 1e-4; SimpleCNN w/ RMSprop 1e-6
-    "n_epochs": 100,
+    "n_epochs": 200,
 
     "callbacks": [
         "decay_early_stopping"
     ],
 
-    "decay_early_stopping_patience": 10,
+    # decay_early_stopping
+    "decay_early_stopping_patience": 20,
     "decay_early_stopping_times": 3,
     "decay_early_stopping_min_delta": 0.01,  # Empirically set for ResNet in AL loop
     "decay_early_stopping_restore_best_weights": True,
 
+    # lr_scheduler
+    "lr_scheduler_epoch": 75,
+    "lr_scheduler_multiplier": 0.1,
+
     # Query strategy arguments
-    "n_query_instances": 256,  # Number of instances to add at each iteration
+    "n_query_instances": 2000,  # Number of instances to add at each iteration
     "query_batch_size": 256,  # Batch size for unlabeled pool iterator
 
     ## Base model
-    "base_model_name": "",
+    "base_model_name": "resnet_imagenet_25_base",
     "base_init_size": 7500,  # With respect to whole training set; either 0-1 (percent) or >1 (number of samples)
 
     # Base model training
