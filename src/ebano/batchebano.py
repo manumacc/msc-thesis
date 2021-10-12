@@ -434,8 +434,6 @@ class Explainer:
             #   nPIR_best, nPIRP_best: indices of best explanation
             results = []
 
-            X_perturbed = X_perturbed.reshape((len(X), len(X_masks_map), -1))
-
             for i in range(len(X)):
                 best_mask = X_masks_map == best[i]
 
