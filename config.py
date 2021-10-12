@@ -40,10 +40,11 @@ config_dict = {
     "lr_init": 0.01,  # VGG16: 1e-2; ResNet: 0.1; SimpleCNN w/ RMSprop 0.0001
     "momentum": 0.9,
     "weight_decay": 1e-6,  # VGG16: 5e-4; ResNet: 1e-4; SimpleCNN w/ RMSprop 1e-6
-    "n_epochs": 200,
+    "n_epochs": 100,
 
     "callbacks": [
-        "decay_early_stopping"
+        "lr_scheduler",
+        "save_best_weights"
     ],
 
     # decay_early_stopping
@@ -53,7 +54,7 @@ config_dict = {
     "decay_early_stopping_restore_best_weights": True,
 
     # lr_scheduler
-    "lr_scheduler_epoch": 75,
+    "lr_scheduler_epoch": 50,
     "lr_scheduler_multiplier": 0.1,
 
     # Query strategy arguments
