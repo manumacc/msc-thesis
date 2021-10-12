@@ -168,11 +168,15 @@ class Experiment:
             if "lr_scheduler" in self.config["callbacks"]:
                 def lr_scheduler(epoch, lr):
                     if epoch < self.config["lr_scheduler_epoch"]:
-                        return lr
+                        return self.config["lr_init"]
                     else:
-                        return lr * self.config["lr_scheduler_multiplier"]
+                        return self.config["lr_init"] * self.config["lr_scheduler_multiplier"]
 
-                callback = tf.keras.callbacks.LearningRateScheduler(lr_scheduler, verbose=1)
+                callback = tf.keras.callbacks.LearningRateScheduler(lr_scheduler, verbose=0)
+                callbacks.append(callback)
+            if "save_best_weights" in self.config["callbacks"]:
+                from callbacks.save_best_weights import SaveBestWeights
+                callback = SaveBestWeights()
                 callbacks.append(callback)
 
             dir_logs = f"{name}_{start_dt.strftime('%Y%m%d_%H%M%S')}"
