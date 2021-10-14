@@ -47,9 +47,9 @@ config_dict = {
     ],
 
     # decay_early_stopping
-    "decay_early_stopping_patience": 10,
+    "decay_early_stopping_patience": 20,
     "decay_early_stopping_times": 3,
-    "decay_early_stopping_min_delta": 0.1,  # Empirically set for ResNet, decays to 1/10
+    "decay_early_stopping_min_delta": 0.01,  # Empirically set for ResNet
     "decay_early_stopping_restore_best_weights": True,
 
     # lr_scheduler
