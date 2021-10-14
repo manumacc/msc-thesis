@@ -17,6 +17,7 @@ class LearningRateDecayEarlyStopping(Callback):
                  patience=0,
                  n_decay=0,
                  restore_best_weights=False,
+                 decay_delta=True,
                  verbose=1):
         super(LearningRateDecayEarlyStopping, self).__init__()
 
@@ -25,6 +26,7 @@ class LearningRateDecayEarlyStopping(Callback):
         self.verbose = verbose
 
         self.min_delta = abs(min_delta)
+        self.decay_delta = decay_delta
         self.wait = 0
         self.stopped_epoch = 0
 
@@ -76,8 +78,14 @@ class LearningRateDecayEarlyStopping(Callback):
                 lr = float(backend.get_value(self.model.optimizer.lr))
                 lr = lr * 0.1
                 backend.set_value(self.model.optimizer.lr, backend.get_value(lr))
+
+                if self.decay_delta and self.current_decay_level <= 1:
+                    self.min_delta = self.min_delta * 0.1
+                    if self.verbose > 0:
+                        print(f"Epoch {epoch + 1}: delta set to {self.min_delta}")
+
                 if self.verbose > 0:
-                    print(f"Epoch {epoch + 1}: learning rate decayed")
+                    print(f"Epoch {epoch + 1}: learning rate decayed to {lr}")
 
             if self.restore_best_weights and self.best_weights is not None:
                 if self.verbose > 0:
