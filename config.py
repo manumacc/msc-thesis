@@ -43,19 +43,18 @@ config_dict = {
     "n_epochs": 100,
 
     "callbacks": [
-        "lr_scheduler",
-        "save_best_weights"
+        "decay_early_stopping"
     ],
 
     # decay_early_stopping
-    "decay_early_stopping_patience": 20,
+    "decay_early_stopping_patience": 10,
     "decay_early_stopping_times": 3,
-    "decay_early_stopping_min_delta": 0.01,  # Empirically set for ResNet in AL loop
+    "decay_early_stopping_min_delta": 0.1,  # Empirically set for ResNet, decays to 1/10
     "decay_early_stopping_restore_best_weights": True,
 
     # lr_scheduler
-    "lr_scheduler_epoch": 50,
-    "lr_scheduler_multiplier": 0.1,
+    # "lr_scheduler_epoch": 50,
+    # "lr_scheduler_multiplier": 0.1,
 
     # Query strategy arguments
     "n_query_instances": 2000,  # Number of instances to add at each iteration
