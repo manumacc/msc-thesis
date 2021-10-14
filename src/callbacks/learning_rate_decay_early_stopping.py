@@ -17,7 +17,6 @@ class LearningRateDecayEarlyStopping(Callback):
                  patience=0,
                  n_decay=0,
                  restore_best_weights=False,
-                 decay_delta=True,
                  verbose=1):
         super(LearningRateDecayEarlyStopping, self).__init__()
 
@@ -26,7 +25,6 @@ class LearningRateDecayEarlyStopping(Callback):
         self.verbose = verbose
 
         self.min_delta = abs(min_delta)
-        self.decay_delta = decay_delta
         self.wait = 0
         self.stopped_epoch = 0
 
@@ -39,6 +37,7 @@ class LearningRateDecayEarlyStopping(Callback):
 
         self.restore_best_weights = restore_best_weights
         self.best_weights = None
+        self.best_epoch = None
 
     def on_train_begin(self, logs=None):
         # Allow instances to be re-used
@@ -47,6 +46,7 @@ class LearningRateDecayEarlyStopping(Callback):
         self.current_decay_level = 0
         self.best = np.Inf
         self.best_weights = None
+        self.best_epoch = None
 
     def on_epoch_end(self, epoch, logs=None):
         if not hasattr(self.model.optimizer, 'lr'):
@@ -64,6 +64,7 @@ class LearningRateDecayEarlyStopping(Callback):
 
         if self._is_improvement(current, self.best) and epoch > 0:  # Ignore first epoch
             self.best = current
+            self.best_epoch = epoch
             if self.restore_best_weights:
                 self.best_weights = self.model.get_weights()
             self.wait = 0
@@ -79,17 +80,12 @@ class LearningRateDecayEarlyStopping(Callback):
                 lr = lr * 0.1
                 backend.set_value(self.model.optimizer.lr, backend.get_value(lr))
 
-                if self.decay_delta and self.current_decay_level <= 1:
-                    self.min_delta = self.min_delta * 0.1
-                    if self.verbose > 0:
-                        print(f"Epoch {epoch + 1}: delta set to {self.min_delta}")
-
                 if self.verbose > 0:
                     print(f"Epoch {epoch + 1}: learning rate decayed to {lr}")
 
             if self.restore_best_weights and self.best_weights is not None:
                 if self.verbose > 0:
-                    print('Restoring model weights from the end of the best epoch.')
+                    print(f"Restoring model weights from the end of the best epoch ({self.best_epoch+1}).")
                 self.model.set_weights(self.best_weights)
 
         logs['lr'] = backend.get_value(self.model.optimizer.lr)
@@ -100,7 +96,7 @@ class LearningRateDecayEarlyStopping(Callback):
 
         if self.restore_best_weights and self.best_weights is not None:
             if self.verbose > 0:
-                print('Restoring model weights from the end of the best epoch.')
+                print(f"Restoring model weights from the end of the best epoch ({self.best_epoch+1}).")
             self.model.set_weights(self.best_weights)
 
     def get_monitor_value(self, logs):
