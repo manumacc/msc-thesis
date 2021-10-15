@@ -127,16 +127,29 @@ class Experiment:
 
         if train_base:
             callbacks = []
-            if "decay_early_stopping" in self.config["base_callbacks"]:
-                from callbacks.learning_rate_decay_early_stopping import LearningRateDecayEarlyStopping
-                callback = LearningRateDecayEarlyStopping(
-                    patience=self.config["base_decay_early_stopping_patience"],
-                    n_decay=self.config["base_decay_early_stopping_times"],
-                    min_delta=self.config["base_decay_early_stopping_min_delta"],
-                    restore_best_weights=self.config["base_decay_early_stopping_restore_best_weights"],
-                    verbose=1
+            if "reduce_lr_restore_on_plateau" in self.config["base_callbacks"]:
+                from callbacks.reduce_lr_restore import ReduceLRRestoreOnPlateau
+
+                best_model_checkpoint_path = pathlib.Path("models", "checkpoints", name, name)
+                callback_checkpoint = tf.keras.callbacks.ModelCheckpoint(
+                    best_model_checkpoint_path,
+                    monitor='val_loss',
+                    save_best_only=True,
+                    save_weights_only=True,
+                    verbose=0,
                 )
-                callbacks.append(callback)
+                callbacks.append(callback_checkpoint)
+                callback_decay = ReduceLRRestoreOnPlateau(
+                    best_model_path=best_model_checkpoint_path,
+                    monitor='val_loss',
+                    factor=self.config["base_reduce_lr_factor"],
+                    patience=self.config["base_reduce_lr_patience"],
+                    cooldown=self.config["base_reduce_lr_cooldown"],
+                    min_delta=self.config["base_reduce_lr_min_delta"],
+                    decay_times=self.config["base_reduce_lr_decay_times"],
+                    verbose=1,
+                )
+                callbacks.append(callback_decay)
 
             start = default_timer()
             logs = al_loop.train_base(
@@ -154,32 +167,32 @@ class Experiment:
                 f.write(f"Elapsed time (s): {end - start}")
 
         else:
-            callbacks = []
-            if "decay_early_stopping" in self.config["callbacks"]:
-                from callbacks.learning_rate_decay_early_stopping import LearningRateDecayEarlyStopping
-                callback = LearningRateDecayEarlyStopping(
-                    patience=self.config["decay_early_stopping_patience"],
-                    n_decay=self.config["decay_early_stopping_times"],
-                    min_delta=self.config["decay_early_stopping_min_delta"],
-                    restore_best_weights=self.config["decay_early_stopping_restore_best_weights"],
-                    verbose=1
-                )
-                callbacks.append(callback)
-            if "lr_scheduler" in self.config["callbacks"]:
-                def lr_scheduler(epoch, lr):
-                    if epoch < self.config["lr_scheduler_epoch"]:
-                        return self.config["lr_init"]
-                    else:
-                        return self.config["lr_init"] * self.config["lr_scheduler_multiplier"]
-
-                callback = tf.keras.callbacks.LearningRateScheduler(lr_scheduler, verbose=0)
-                callbacks.append(callback)
-            if "save_best_weights" in self.config["callbacks"]:
-                from callbacks.save_best_weights import SaveBestWeights
-                callback = SaveBestWeights()
-                callbacks.append(callback)
-
             dir_logs = f"{name}_{start_dt.strftime('%Y%m%d_%H%M%S')}"
+
+            callbacks = []
+            if "reduce_lr_restore_on_plateau" in self.config["callbacks"]:
+                from callbacks.reduce_lr_restore import ReduceLRRestoreOnPlateau
+
+                best_model_checkpoint_path = pathlib.Path("models", "checkpoints", dir_logs, name)
+                callback_checkpoint = tf.keras.callbacks.ModelCheckpoint(
+                    best_model_checkpoint_path,
+                    monitor='val_loss',
+                    save_best_only=True,
+                    save_weights_only=True,
+                    verbose=0,
+                )
+                callbacks.append(callback_checkpoint)
+                callback_decay = ReduceLRRestoreOnPlateau(
+                    best_model_path=best_model_checkpoint_path,
+                    monitor='val_loss',
+                    factor=self.config["reduce_lr_factor"],
+                    patience=self.config["reduce_lr_patience"],
+                    cooldown=self.config["reduce_lr_cooldown"],
+                    min_delta=self.config["reduce_lr_min_delta"],
+                    decay_times=self.config["reduce_lr_decay_times"],
+                    verbose=1,
+                )
+                callbacks.append(callback_decay)
 
             start = default_timer()
             logs = al_loop.learn(

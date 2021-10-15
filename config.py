@@ -43,18 +43,15 @@ config_dict = {
     "n_epochs": 100,
 
     "callbacks": [
-        "decay_early_stopping"
+        "reduce_lr_restore_on_plateau",
     ],
 
     # decay_early_stopping
-    "decay_early_stopping_patience": 20,
-    "decay_early_stopping_times": 3,
-    "decay_early_stopping_min_delta": 0.01,  # Empirically set for ResNet
-    "decay_early_stopping_restore_best_weights": True,
-
-    # lr_scheduler
-    # "lr_scheduler_epoch": 50,
-    # "lr_scheduler_multiplier": 0.1,
+    "reduce_lr_patience": 10,
+    "reduce_lr_factor": 0.1,
+    "reduce_lr_min_delta": 0.01,  # Empirically set for ResNet
+    "reduce_lr_cooldown": 0,
+    "reduce_lr_decay_times": 3,  # Decay LR N times
 
     # Query strategy arguments
     "n_query_instances": 2000,  # Number of instances to add at each iteration
@@ -70,11 +67,12 @@ config_dict = {
     "base_n_epochs": 1000,
 
     "base_callbacks": [
-        "decay_early_stopping"
+        "reduce_lr_restore_on_plateau",
     ],
 
-    "base_decay_early_stopping_patience": 50,
-    "base_decay_early_stopping_times": 3,
-    "base_decay_early_stopping_min_delta": 0.1,  # Empirically set for ResNet
-    "base_decay_early_stopping_restore_best_weights": True,
+    "base_reduce_lr_patience": 50,
+    "base_reduce_lr_factor": 0.1,
+    "base_reduce_lr_min_delta": 0.1,  # Empirically set for ResNet
+    "base_reduce_lr_cooldown": 0,
+    "base_reduce_lr_decay_times": 3,  # Decay LR N times
 }
