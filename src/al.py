@@ -126,9 +126,6 @@ class ActiveLearning:
             val_bound = int(len(X_train) * self.val_size)
             X_val, y_val = X_train[:val_bound], y_train[:val_bound]
             X_train_init, y_train_init = X_train[val_bound:], y_train[val_bound:]
-
-            # Make sure each set contains at least 1 element of each class
-            assert len(np.unique(y_train_init, axis=0)) == len(np.unique(y_val, axis=0)) == len(np.unique(y_pool, axis=0))
         elif dataset_name == "imagenet-25":
             with open("data/imagenet_25/imagenet_25_train.pkl", "rb") as f:
                 (X, y) = pickle.load(f)
@@ -186,9 +183,6 @@ class ActiveLearning:
         print(f"Length of initial training set: {len(X_train_init)}")
         print(f"Length of validation set: {len(X_val)}")
         print(f"Length of pool set: {len(X_pool)}")
-
-        # Make sure each set contains at least 1 element of each class
-        assert len(np.unique(y_train_init, axis=0)) == len(np.unique(y_val, axis=0)) == len(np.unique(y_pool, axis=0)) == len(cls_train)
 
         # Test set
         X_test, y_test, cls_test = self.load_data_from_directory(path_test, class_sample_size_test, seed=seed)
