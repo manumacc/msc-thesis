@@ -47,7 +47,7 @@ config_dict = {
     ],
 
     # decay_early_stopping
-    "reduce_lr_patience": 10,
+    "reduce_lr_patience": 20,
     "reduce_lr_factor": 0.1,
     "reduce_lr_min_delta": 0.01,  # Empirically set for ResNet
     "reduce_lr_cooldown": 0,
@@ -70,7 +70,7 @@ config_dict = {
         "reduce_lr_restore_on_plateau",
     ],
 
-    "base_reduce_lr_patience": 50,
+    "base_reduce_lr_patience": 100,
     "base_reduce_lr_factor": 0.1,
     "base_reduce_lr_min_delta": 0.1,  # Empirically set for ResNet
     "base_reduce_lr_cooldown": 0,
