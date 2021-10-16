@@ -330,7 +330,7 @@ class ActiveLearning:
 
         print("Evaluating base model")
         test_metrics = self.model.evaluate(X_test, y_test, batch_size=batch_size)
-        logs["base_test"].append(test_metrics)
+        logs["base_test"] = test_metrics
 
         # Active learning loop
         for i in range(n_loops):
