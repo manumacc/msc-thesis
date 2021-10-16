@@ -36,4 +36,4 @@ class ReduceLRRestoreOnPlateau(ReduceLROnPlateau):
         print("Reload best weights")
         self.model.load_weights(self.best_model_path)
 
-        super().on_train_end()
+        super().on_train_end(logs)
