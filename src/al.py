@@ -328,6 +328,10 @@ class ActiveLearning:
         print("Initializing base model")
         self.initialize_base_model(base_model_name)
 
+        print("Evaluating base model")
+        test_metrics = self.model.evaluate(X_test, y_test, batch_size=batch_size)
+        logs["base_test"].append(test_metrics)
+
         # Active learning loop
         for i in range(n_loops):
             print(f"* Iteration #{i+1}")
