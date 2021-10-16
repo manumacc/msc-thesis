@@ -31,3 +31,9 @@ class ReduceLRRestoreOnPlateau(ReduceLROnPlateau):
                         self.decay_counter += 1
 
             super().on_epoch_end(epoch, logs)
+
+    def on_train_end(self, logs=None):
+        print("Reload best weights")
+        self.model.load_weights(self.best_model_path)
+
+        super().on_train_end()
