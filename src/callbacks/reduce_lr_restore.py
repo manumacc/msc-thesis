@@ -1,3 +1,4 @@
+from tensorflow.keras import backend
 from tensorflow.keras.callbacks import ReduceLROnPlateau
 from tensorflow.python.platform import tf_logging as logging
 
@@ -31,6 +32,9 @@ class ReduceLRRestoreOnPlateau(ReduceLROnPlateau):
                         self.decay_counter += 1
 
             super().on_epoch_end(epoch, logs)
+        else:
+            logs = logs or {}
+            logs['lr'] = backend.get_value(self.model.optimizer.lr)
 
     def on_train_end(self, logs=None):
         print("Reload best weights")

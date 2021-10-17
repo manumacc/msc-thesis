@@ -161,6 +161,8 @@ class Experiment:
             )
             end = default_timer()
 
+            with open(pathlib.Path("models", name, "config.pkl"), "wb") as f:
+                pickle.dump(self.config, f)
             with open(pathlib.Path("models", name, "logs.pkl"), "wb") as f:
                 pickle.dump(logs, f)
             with open(pathlib.Path("models", name, "stats.txt"), "w") as f:

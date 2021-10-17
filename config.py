@@ -70,9 +70,9 @@ config_dict = {
         "reduce_lr_restore_on_plateau",
     ],
 
-    "base_reduce_lr_patience": 100,
+    "base_reduce_lr_patience": 50,
     "base_reduce_lr_factor": 0.1,
-    "base_reduce_lr_min_delta": 0.1,  # Empirically set for ResNet
+    "base_reduce_lr_min_delta": 0.01,  # Empirically set for ResNet
     "base_reduce_lr_cooldown": 0,
-    "base_reduce_lr_decay_times": 3,  # Decay LR N times
+    "base_reduce_lr_decay_times": 5,  # Decay LR N times
 }
