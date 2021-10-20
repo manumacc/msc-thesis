@@ -406,6 +406,7 @@ class Explainer:
                   min_features=2,
                   max_features=5,
                   display_plots=True,
+                  return_indices=False,
                   return_results=False,
                   use_gpu=False,
                   seed=None,
@@ -422,15 +423,18 @@ class Explainer:
             clustering:
             min_features:
             max_features:
-            cluster_max_iter:
-            cluster_batch_size:
             display_plots: If True, create and display visual explanations.
                 Otherwise, only compute indices.
+            return_indices:
             return_results:
+            use_gpu:
             seed: Seed for reproducibility.
         """
 
-        X_preprocessed = preprocess_input_fn(np.copy(X))  # avoid destructive action
+        if preprocess_input_fn:
+            X_preprocessed = preprocess_input_fn(np.copy(X))  # avoid destructive action
+        else:
+            X_preprocessed = X
 
         hc = self.get_hypercolumns(X_preprocessed, features=hypercolumn_features, reduction=hypercolumn_reduction)
         hc_r = self.reduce_hypercolumns(hc, features=hypercolumn_features, reduction=hypercolumn_reduction)
@@ -469,7 +473,16 @@ class Explainer:
                     image_i = utils.ndarray_to_pil(X[i])
                     self.explain_visual(image_i, cois[i], X_masks[i][mask], nPIR[i][mask], nPIRP[i][mask])
 
-        results = [None]
+        if return_indices:
+            nPIR_best = []
+            nPIRP_best = []
+            for i in range(len(X)):
+                best_mask = X_masks_map == best[i]
+                nPIR_best.append(nPIR[i][best_mask])
+                nPIRP_best.append(nPIRP[i][best_mask])
+
+            return nPIR_best, nPIRP_best
+
         if return_results:
             # Fetch data for analysis
             # Returns (list of dicts):
@@ -483,7 +496,6 @@ class Explainer:
 
             for i in range(len(X)):
                 best_mask = X_masks_map == best[i]
-
                 results.append({
                     "X_original": X[i],
                     "truth": y[i],
@@ -494,7 +506,7 @@ class Explainer:
                     "nPIRP_best": nPIRP[i][best_mask],
                 })
 
-        return results
+            return results
 
     @staticmethod
     def softsign(x):

@@ -107,6 +107,24 @@ class Experiment:
                 query_kwargs = {
                     "query_batch_size": self.config["query_batch_size"],
                 }
+            elif self.config["query_strategy"] == "ebano-mix":
+                from query.ebano_mix import EBAnOMixQueryStrategy
+                query_strategy = EBAnOMixQueryStrategy()
+                query_kwargs = {
+                    "switch_iteration": self.config["switch_iteration"],
+                    "switch_first_method": "margin-sampling",
+                    "query_batch_size": self.config["query_batch_size"],
+                    "n_classes": self.config["n_classes"],
+                    "input_shape": target_size,
+                    "layers_to_analyze": self.config["layers_to_analyze"],
+                    "hypercolumn_features": self.config["hypercolumn_features"],
+                    "hypercolumn_reduction": self.config["hypercolumn_reduction"],
+                    "clustering": self.config["clustering"],
+                    "min_features": self.config["min_features"],
+                    "max_features": self.config["max_features"],
+                    "use_gpu": self.config["ebano_use_gpu"],
+                    "niter": self.config["kmeans_niter"]
+                }
 
         # Initialize active learning loop
         al_loop = al.ActiveLearning(

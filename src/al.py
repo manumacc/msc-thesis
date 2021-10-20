@@ -238,7 +238,7 @@ class ActiveLearning:
 
         return X_val, y_val
 
-    def get_pool(self, preprocess=True, get_metadata=False):
+    def get_pool(self, preprocess=True):
         """Get current unlabeled pool"""
 
         print("Getting current pool")
@@ -250,15 +250,7 @@ class ActiveLearning:
             print("Preprocessing X_pool")
             X_pool = self._prepare_dataset(X_pool)
 
-        if get_metadata:
-            metadata = {
-                "len": len(X_pool),
-                "is_raw": False if preprocess else True,
-            }
-
-            return X_pool, idx_pool, metadata
-        else:
-            return X_pool, idx_pool
+        return X_pool, idx_pool
 
     def get_test(self, preprocess=True):
         X_test = np.copy(self.X_test)
@@ -285,11 +277,11 @@ class ActiveLearning:
         self.idx_queried_last = idx
         print(f"Total amount of queried samples post-query: {len(self.idx_queried)}")
 
-    def query(self, X_pool, metadata, n_query_instances, seed=None, **query_kwargs):
+    def query(self, X_pool, n_query_instances, current_iter, seed=None, **query_kwargs):
         """Call to query strategy function"""
 
         self.query_strategy.set_model(self.model, self.preprocess_input_fn)
-        return self.query_strategy(X_pool, metadata, n_query_instances, seed=seed, **query_kwargs)
+        return self.query_strategy(X_pool, n_query_instances, current_iter, seed=seed, **query_kwargs)
 
     def learn(self,
               n_loops,
@@ -349,9 +341,9 @@ class ActiveLearning:
                 print("Setting weights to last iteration weights")
                 self.model.set_weights(self.model_weights_checkpoint)
 
-            X_pool, idx_pool, metadata = self.get_pool(preprocess=False, get_metadata=True)
+            X_pool, idx_pool = self.get_pool(preprocess=False)
             print("Querying")
-            idx_query = self.query(X_pool, metadata, n_query_instances, seed=seed, **query_kwargs)
+            idx_query = self.query(X_pool, n_query_instances, current_iter=i, seed=seed, **query_kwargs)
             print(f"Queried {len(idx_query)} samples.")
             self.add_to_train(idx_pool[idx_query])
             del X_pool, idx_query

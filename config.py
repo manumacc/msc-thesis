@@ -55,7 +55,19 @@ config_dict = {
 
     # Query strategy arguments
     "n_query_instances": 2000,  # Number of instances to add at each iteration
-    "query_batch_size": 256,  # Batch size for unlabeled pool iterator
+    "query_batch_size": 256,  # Batch size for unlabeled pool iterator. Set to a low size for EBAnO.
+
+    # EBAnO query strategy arguments
+    "switch_iteration": 3,  # Do `switch_iteration` AL iterations with `switch_first_method` QS, then switch to EBAnO
+    "switch_first_method": "margin-sampling",
+    "layers_to_analyze": 3,
+    "hypercolumn_features": 10,
+    "hypercolumn_reduction": "sampletsvd",
+    "clustering": "faisskmeans",
+    "kmeans_niter": 100,
+    "min_features": 2,
+    "max_features": 5,
+    "ebano_use_gpu": False,
 
     ## Base model
     "base_model_name": "resnet_imagenet_25_base",
