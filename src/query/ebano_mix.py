@@ -11,7 +11,7 @@ class EBAnOMixQueryStrategy(QueryStrategy):
                  seed=None,
                  current_iteration=None,
                  switch_iteration=4,
-                 method="margin-sampling",
+                 switch_first_method="margin-sampling",
                  query_batch_size=32,
                  n_classes=None,
                  input_shape=None,
@@ -21,26 +21,29 @@ class EBAnOMixQueryStrategy(QueryStrategy):
                  clustering=None,
                  min_features=2,
                  max_features=5,
-                 use_gpu=False):
+                 use_gpu=False,
+                 **ebano_kwargs):
 
-        if current_iter <= switch_iteration:
-            if method == "margin-sampling":
+        if current_iter < switch_iteration:
+            if switch_first_method == "margin-sampling":
                 from query.margin_sampling import MarginSamplingQueryStrategy
                 qs = MarginSamplingQueryStrategy()
                 qs.set_model(self.model, self.preprocess_input_fn)
-                return qs(X_pool, n_query_instances, seed=seed, query_batch_size=query_batch_size)
-            elif method == "random":
+                return qs(X_pool, n_query_instances, current_iter, seed=seed, query_batch_size=query_batch_size)
+            elif switch_first_method == "random":
                 from query.random import RandomQueryStrategy
                 qs = RandomQueryStrategy()
-                return qs(X_pool, n_query_instances, seed=seed)
+                return qs(X_pool, n_query_instances, current_iter, seed=seed)
             else:
-                raise ValueError(f"Unknown query method {method}")
+                raise ValueError(f"Unknown query method {switch_first_method}")
 
         # Predict
-        X_pool = self.preprocess_input_fn(X_pool)
+        X_pool_preprocessed = self.preprocess_input_fn(np.copy(X_pool))
         preds = self.model.predict(X_pool,
                                    batch_size=query_batch_size,
                                    verbose=1)  # (len(X_pool), n_classes)
+        del X_pool_preprocessed
+        cois = np.argmax(preds, axis=1)
 
         # Explain via BatchEBAnO
         nPIR_best = []
@@ -56,15 +59,17 @@ class EBAnOMixQueryStrategy(QueryStrategy):
         n_batches = len(X_pool) // query_batch_size + 1
 
         for i in range(n_batches):
-            if len(X_pool) == 0:  # skip last batch if empty
+            batch_len = len(X_pool[i*query_batch_size:(i+1)*query_batch_size])
+            if batch_len == 0:  # skip last batch if empty
+                print("Empty batch")
                 pass
 
-            print(f"Processing batch {i+1}/{n_batches}")
+            print(f"Processing batch {i+1}/{n_batches} of size {batch_len}")
 
             nPIR_best_batch, nPIRP_best_batch = explainer.fit_batch(
                 X_pool[i*query_batch_size:(i+1)*query_batch_size],
-                cois=preds[i*query_batch_size:(i+1)*query_batch_size],
-                preprocess_input_fn=None,  # data is already preprocessed
+                cois=cois[i*query_batch_size:(i+1)*query_batch_size],
+                preprocess_input_fn=self.preprocess_input_fn,  # data is already preprocessed
                 hypercolumn_features=hypercolumn_features,
                 hypercolumn_reduction=hypercolumn_reduction,
                 clustering=clustering,
@@ -74,7 +79,7 @@ class EBAnOMixQueryStrategy(QueryStrategy):
                 return_indices=True,
                 use_gpu=False,
                 seed=seed,
-                niter=100,
+                niter=ebano_kwargs["niter"],
             )
 
             nPIR_best.extend(nPIR_best_batch)

@@ -154,7 +154,7 @@ class Explainer:
                 for n_clusters in range(min_features, max_features+1):
                     with Profiling(f"Compute explanation for {n_clusters} clusters"):
                         kmeans = faiss.Clustering(d, n_clusters)
-                        kmeans.verbose = bool(1)
+                        kmeans.verbose = bool(0)
                         kmeans.niter = kwargs["niter"]
 
                         kmeans.train(hc[i], index)
@@ -431,10 +431,7 @@ class Explainer:
             seed: Seed for reproducibility.
         """
 
-        if preprocess_input_fn:
-            X_preprocessed = preprocess_input_fn(np.copy(X))  # avoid destructive action
-        else:
-            X_preprocessed = X
+        X_preprocessed = preprocess_input_fn(np.copy(X))  # avoid destructive action
 
         hc = self.get_hypercolumns(X_preprocessed, features=hypercolumn_features, reduction=hypercolumn_reduction)
         hc_r = self.reduce_hypercolumns(hc, features=hypercolumn_features, reduction=hypercolumn_reduction)
