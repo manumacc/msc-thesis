@@ -1,4 +1,3 @@
-import gc
 import sys
 
 import numpy as np
@@ -10,6 +9,7 @@ from tensorflow.keras.layers import Conv2D
 import tensorflow.keras.backend as K
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+import faiss
 
 import utils
 from utils import Profiling, pil_to_ndarray, ndarray_to_pil
@@ -55,14 +55,13 @@ class Explainer:
             # Extract activations for each layer to analyze
             activations = K.function([self.model.layers[0].input], self.layers)(X)  # list of len(self.layers)
 
-        with Profiling("Extract hypercolumns"):
-            # Preallocate array of hypercolumns
-            n_filters = sum([a.shape[-1] for a in activations])
-            hc = np.empty((len(X), n_filters, *self.input_shape), dtype='float32')  # (batch size, num features, filter x, filter y)
+        # Preallocate array of hypercolumns
+        n_filters = sum([a.shape[-1] for a in activations])
+        hc = np.empty((len(X), n_filters, *self.input_shape), dtype='float32')  # (batch size, num features, filter x, filter y)
 
-            # Extract hypercolumns
-            for img_i in range(len(X)):
-                print(f"Image {img_i}")
+        # Extract hypercolumns
+        for img_i in range(len(X)):
+            with Profiling(f"Image {img_i} hypercolumns extraction"):
                 f_i = 0
                 for layer_i, layer_activations in enumerate(activations):  # layer_activations.shape = (batch size, filter x, filter y, num filters) e.g., (8, 14, 14, 512)
                     layer_activations_img = layer_activations[img_i].transpose((2, 0, 1))  # (num filters, filter x, filter y)
@@ -71,22 +70,30 @@ class Explainer:
                         hc[img_i, f_i] = scaled
                         f_i += 1
 
-            hc = hc.reshape((len(X), n_filters, np.prod(self.input_shape))).transpose((0, 2, 1))  # (batch_size, x*y (224*224), num filters)
+        hc = hc.reshape((len(X), n_filters, np.prod(self.input_shape))).transpose((0, 2, 1))  # (batch_size, x*y (224*224), num filters)
 
+        return hc
+
+    def reduce_hypercolumns(self, hc, features=30, reduction="pca"):
         with Profiling("Reduce dimensionality of hypercolumns"):
+            if reduction == "none" or reduction is None:
+                print("No reduction to do.")
+                return hc
+
             # Here, each image is treated as a "dataset" with np.prod(input_shape)
             # samples, each of which has `n_filters` features. We want to reduce
             # the number of these features to `features`.
-            hc_r = np.empty((len(X), np.prod(self.input_shape), features), dtype='float32')  # (batch size, x*y, features)
+            hc_r = np.empty((len(hc), np.prod(self.input_shape), features), dtype='float32')  # (batch size, x*y, features)
 
             if reduction == "pca":
                 for i, hc_i in enumerate(hc):
-                    print(f"Performing PCA image {i}")
                     hc_r[i] = self._hypercolumn_reduction_pca(hc_i, n_components=features)
             elif reduction == "tsvd":
                 for i, hc_i in enumerate(hc):
-                    print(f"Performing TSVD image {i}")
                     hc_r[i] = self._hypercolumn_reduction_tsvd(hc_i, n_components=features)
+            elif reduction == "sampletsvd":
+                for i, hc_i in enumerate(hc):
+                    hc_r[i] = self._hypercolumn_reduction_tsvd(hc_i, n_components=features, fit_size=0.01)
             else:
                 raise ValueError(f"Unsupported dimensionality reduction: {reduction}")
 
@@ -94,7 +101,6 @@ class Explainer:
 
         with Profiling("Normalize (L2) hypercolumns"):
             for i in range(len(hc_r)):
-                print(f"Normalize hypercolumns of image {i}")
                 hc_r[i] = normalize(hc_r[i], norm='l2', axis=1)  # L2 normalization over features
 
         return hc_r
@@ -106,31 +112,70 @@ class Explainer:
         return hc_pca
 
     @staticmethod
-    def _hypercolumn_reduction_tsvd(hc, n_components):
+    def _hypercolumn_reduction_tsvd(hc, n_components, fit_size=1.):
         tsvd = TruncatedSVD(n_components)
-        hc_tsvd = tsvd.fit_transform(hc)
+        if fit_size < 1:
+            idx = np.random.choice(len(hc), size=int(len(hc) * fit_size), replace=False)
+            tsvd.fit(hc[idx])
+            hc_tsvd = tsvd.transform(hc)
+        else:
+            hc_tsvd = tsvd.fit_transform(hc)
         return hc_tsvd
 
-    def cluster_hypercolumns(self, hc, min_features=2, max_features=5, clustering="minibatchkmeans", seed=None, **kwargs):
+    def cluster_hypercolumns(self,
+                             hc,
+                             min_features=2,
+                             max_features=5,
+                             clustering="minibatchkmeans",
+                             seed=None,
+                             use_gpu=False,
+                             **kwargs):
         # Each image has (max_features-min_features+1) feature maps, i.e., one
         # for each possible number of clusters. The best clustering will be
         # computed *later*, for now we need to save all possible maps.
         feature_maps = np.empty((hc.shape[0], max_features-min_features+1, *self.input_shape),
                                 dtype=np.uint8)  # (batch_size, max_features-min_features+1, x, y)
 
-        for n_clusters in range(min_features, max_features+1):
-            with Profiling(f"Compute explanation for {n_clusters} clusters"):
-                if clustering == "minibatchkmeans":
-                    model = MiniBatchKMeans(n_clusters=n_clusters, random_state=seed, max_iter=kwargs["max_iter"], batch_size=kwargs["batch_size"])
-                elif clustering == "kmeans":
-                    model = KMeans(n_clusters=n_clusters, random_state=seed, max_iter=kwargs["max_iter"])
-                else:
-                    raise ValueError(f"Unsupported clustering algorithm: {clustering}")
+        if clustering == "faisskmeans":
+            d = hc.shape[-1]  # number of features
+            for i in range(len(hc)):
+                with Profiling(f"Building index for image {i}"):
+                    # hc_r shape = (batch size, x*y, features)
+                    if use_gpu:
+                        res = faiss.StandardGpuResources()  # use a single GPU
+                        config = faiss.GpuIndexFlatConfig()
+                        index = faiss.GpuIndexFlatL2(res, d, config)
+                    else:
+                        index = faiss.IndexFlatL2(d)
+                    # index.add(hc[i])
+                    # print(index.is_trained)
+                    # print(index.ntotal)
 
-                for i in range(len(hc)):
-                    print(f"Compute explanation for image {i}")
-                    feature_map = model.fit_predict(hc[i])
-                    feature_maps[i, n_clusters-min_features] = feature_map.reshape(*self.input_shape).astype(np.uint8)
+                for n_clusters in range(min_features, max_features+1):
+                    with Profiling(f"Compute explanation for {n_clusters} clusters"):
+                        kmeans = faiss.Clustering(d, n_clusters)
+                        kmeans.verbose = bool(1)
+                        kmeans.niter = kwargs["niter"]
+
+                        kmeans.train(hc[i], index)
+                        _, I = index.search(hc[i], 1)
+                        # feature_map = I.squeeze()
+                        feature_maps[i, n_clusters-min_features] = I.reshape(*self.input_shape).astype(np.uint8)
+
+        else:
+            for n_clusters in range(min_features, max_features+1):
+                with Profiling(f"Compute explanation for {n_clusters} clusters"):
+                    if clustering == "minibatchkmeans":
+                        model = MiniBatchKMeans(n_clusters=n_clusters, random_state=seed, max_iter=kwargs["cluster_max_iter"], batch_size=kwargs["cluster_batch_size"])
+                    elif clustering == "kmeans":
+                        model = KMeans(n_clusters=n_clusters, random_state=seed, max_iter=kwargs["cluster_max_iter"])
+                    else:
+                        raise ValueError(f"Unsupported clustering algorithm: {clustering}")
+
+                    for i in range(len(hc)):
+                        print(f"Compute explanation for image {i}")
+                        feature_map = model.fit_predict(hc[i])
+                        feature_maps[i, n_clusters-min_features] = feature_map.reshape(*self.input_shape).astype(np.uint8)
 
         feature_maps += 1  # start labels from 1 instead of 0
         return feature_maps
@@ -360,11 +405,11 @@ class Explainer:
                   clustering="minibatchkmeans",
                   min_features=2,
                   max_features=5,
-                  cluster_max_iter=300,
-                  cluster_batch_size=1000,
                   display_plots=True,
                   return_results=False,
-                  seed=None):
+                  use_gpu=False,
+                  seed=None,
+                  **kwargs):
         """Fit explainer to a batch of images.
 
         Args:
@@ -388,14 +433,16 @@ class Explainer:
         X_preprocessed = preprocess_input_fn(np.copy(X))  # avoid destructive action
 
         hc = self.get_hypercolumns(X_preprocessed, features=hypercolumn_features, reduction=hypercolumn_reduction)
-        feature_maps = self.cluster_hypercolumns(hc,
+        hc_r = self.reduce_hypercolumns(hc, features=hypercolumn_features, reduction=hypercolumn_reduction)
+        del hc
+
+        feature_maps = self.cluster_hypercolumns(hc_r,
                                                  min_features=min_features,
                                                  max_features=max_features,
                                                  clustering=clustering,
                                                  seed=seed,
-                                                 max_iter=cluster_max_iter,
-                                                 batch_size=cluster_batch_size)
-        del hc
+                                                 use_gpu=use_gpu,
+                                                 **kwargs)
 
         X_masks, X_masks_map = self.generate_perturbation_masks(X, feature_maps, min_features=min_features)
         del feature_maps
@@ -412,8 +459,8 @@ class Explainer:
 
         nPIR, nPIRP, best = self.explain_numeric(preds_perturbed, preds_original, X_masks_map, cois)
 
-        with Profiling("Explain visually"):
-            if display_plots:
+        if display_plots:
+            with Profiling("Explain visually"):
                 for i in range(len(X)):
                     print(f"# image {i}, best explanation k={best[i]+min_features}")
                     print(f"# coi (pred): {cois[i]} ground truth: {y[i]} correctly classified: {cois[i] == y[i]}")
