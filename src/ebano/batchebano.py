@@ -56,9 +56,8 @@ class Explainer:
 
     def get_hypercolumns(self, X):
         # Extract activations for each layer to analyze
-        with Profiling("getting activations"):
-            activations = self.extractor(X)  # list of len(self.layers)
-            activations = [a.numpy() for a in activations]
+        activations = self.extractor(X)  # list of len(self.layers)
+        activations = [a.numpy() for a in activations]
 
         # Preallocate array of hypercolumns
         n_filters = sum([a.shape[-1] for a in activations])
