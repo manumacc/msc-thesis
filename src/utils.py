@@ -10,7 +10,7 @@ class Profiling(object):
 
     def __enter__(self):
         self.start = perf_counter()
-        print(f"- Phase {self.phase}", flush=True)
+        print(f"- {self.phase}", flush=True)
         return self
 
     def __exit__(self, *args):
