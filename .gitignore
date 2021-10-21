@@ -9,6 +9,9 @@ data/*
 # Logs
 logs/*
 
+# Models
+models/*
+
 # PyCharm
 .idea
 
