@@ -28,6 +28,11 @@ class MixQueryStrategy(QueryStrategy):
             qs = MarginSamplingQueryStrategy()
             qs.set_model(self.model, self.preprocess_input_fn)
             return qs(X_pool, n_query_instances, current_iter, seed=seed, query_batch_size=query_batch_size)
+        elif current_method == "entropy":
+            from query.entropy import EntropyQueryStrategy
+            qs = EntropyQueryStrategy()
+            qs.set_model(self.model, self.preprocess_input_fn)
+            return qs(X_pool, n_query_instances, current_iter, seed=seed, query_batch_size=query_batch_size)
         elif current_method == "random":
             from query.random import RandomQueryStrategy
             qs = RandomQueryStrategy()
