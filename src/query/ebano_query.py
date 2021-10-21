@@ -3,15 +3,12 @@ import numpy as np
 from ebano.batchebano import Explainer
 from qs import QueryStrategy
 
-class EBAnOMixQueryStrategy(QueryStrategy):
+class EBAnOQueryStrategy(QueryStrategy):
     def __call__(self,
                  X_pool,
                  n_query_instances,
                  current_iter,
                  seed=None,
-                 current_iteration=None,
-                 switch_iteration=4,
-                 switch_first_method="margin-sampling",
                  query_batch_size=32,
                  n_classes=None,
                  input_shape=None,
@@ -24,22 +21,9 @@ class EBAnOMixQueryStrategy(QueryStrategy):
                  use_gpu=False,
                  **ebano_kwargs):
 
-        if current_iter < switch_iteration:
-            if switch_first_method == "margin-sampling":
-                from query.margin_sampling import MarginSamplingQueryStrategy
-                qs = MarginSamplingQueryStrategy()
-                qs.set_model(self.model, self.preprocess_input_fn)
-                return qs(X_pool, n_query_instances, current_iter, seed=seed, query_batch_size=query_batch_size)
-            elif switch_first_method == "random":
-                from query.random import RandomQueryStrategy
-                qs = RandomQueryStrategy()
-                return qs(X_pool, n_query_instances, current_iter, seed=seed)
-            else:
-                raise ValueError(f"Unknown query method {switch_first_method}")
-
         # Predict
         X_pool_preprocessed = self.preprocess_input_fn(np.copy(X_pool))
-        preds = self.model.predict(X_pool,
+        preds = self.model.predict(X_pool_preprocessed,
                                    batch_size=query_batch_size,
                                    verbose=1)  # (len(X_pool), n_classes)
         del X_pool_preprocessed
@@ -85,10 +69,47 @@ class EBAnOMixQueryStrategy(QueryStrategy):
             nPIR_best.extend(nPIR_best_batch)
             nPIRP_best.extend(nPIRP_best_batch)
 
-        # Process indices for query
-        # ...
+        idx_candidates = self.query_most_influential_has_low_precision(nPIR_best, nPIRP_best)
 
-        # TODO: actually implement this
-        idx = np.arange(0, len(X_pool))
-        idx_query = np.random.choice(idx, size=n_query_instances, replace=False)
+        if len(idx_candidates) > n_query_instances:
+            # If too many candidates, randomly choose among them
+            rng = np.random.default_rng(seed)
+            idx_query = rng.choice(idx_candidates, size=n_query_instances, replace=False)
+        elif len(idx_candidates) < n_query_instances:
+            # If too few candidates, add more by selecting among non-candidates
+            idx_others = np.arange(len(X_pool))
+            np.delete(idx_others, idx_candidates)
+
+            rng = np.random.default_rng(seed)
+            idx_additional = rng.choice(idx_others, size=(n_query_instances-len(idx_candidates)), replace=False)
+
+            idx_query = np.concatenate(idx_candidates, idx_additional)
+        else:
+            idx_query = idx_candidates
+
         return idx_query
+
+    @staticmethod
+    def query_most_influential_has_low_precision(nPIR, nPIRP):
+        """
+        Select samples whose most influential interpretable feature on the class
+        of interest, i.e., the feature that has highest nPIR, is not focused on
+        the class of interest, i.e., it has low associated nPIRP.
+        """
+
+        assert len(nPIR) == len(nPIRP)
+        n = len(nPIR)
+
+        nPIR_max = np.empty(n)
+        nPIRP_of_nPIR_max = np.empty(n)
+        for i in range(n):
+            idx = np.argmax(nPIR[i])
+            nPIR_max[i] = nPIR[i][idx]
+            nPIRP_of_nPIR_max[i] = nPIRP[i][idx]
+
+        candidates = []
+        for i in range(n):
+            if nPIR_max > 0. and nPIRP_of_nPIR_max < 0.:
+                candidates.append(i)
+
+        return np.array(candidates)

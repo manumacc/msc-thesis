@@ -107,12 +107,11 @@ class Experiment:
                 query_kwargs = {
                     "query_batch_size": self.config["query_batch_size"],
                 }
-            elif self.config["query_strategy"] == "ebano-mix":
-                from query.ebano_mix import EBAnOMixQueryStrategy
-                query_strategy = EBAnOMixQueryStrategy()
+            elif self.config["query_strategy"] == "mix":
+                from query.mix import MixQueryStrategy
+                query_strategy = MixQueryStrategy()
                 query_kwargs = {
-                    "switch_iteration": self.config["switch_iteration"],
-                    "switch_first_method": "margin-sampling",
+                    "mix_iteration_methods": self.config["mix_iteration_methods"],
                     "query_batch_size": self.config["query_batch_size"],
                     "n_classes": self.config["n_classes"],
                     "input_shape": target_size,

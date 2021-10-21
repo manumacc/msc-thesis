@@ -58,8 +58,6 @@ config_dict = {
     "query_batch_size": 256,  # Batch size for unlabeled pool iterator. Set to a low size for EBAnO.
 
     # EBAnO query strategy arguments
-    "switch_iteration": 3,  # Do `switch_iteration` AL iterations with `switch_first_method` QS, then switch to EBAnO
-    "switch_first_method": "margin-sampling",
     "layers_to_analyze": 3,
     "hypercolumn_features": 10,
     "hypercolumn_reduction": "sampletsvd",
@@ -68,6 +66,20 @@ config_dict = {
     "min_features": 2,
     "max_features": 5,
     "ebano_use_gpu": False,
+
+    # Mix query strategy arguments
+    "mix_iteration_methods": {
+        0: "margin-sampling",  # 20000 -> 18000
+        1: "margin-sampling",  # 18000 -> 16000
+        2: "margin-sampling",  # 16000 -> 14000
+        3: "margin-sampling",  # 14000 -> 12000
+        4: "margin-sampling",  # 12000 -> 10000
+        5: "ebano",  # 10000 -> 8000
+        6: "ebano",  # 8000 -> 6000
+        7: "ebano",  # 6000 -> 4000
+        8: "margin-sampling",  # 4000 -> 2000
+        9: "random",  # 2000 -> 0 (i.e., take all)
+    },
 
     ## Base model
     "base_model_name": "resnet_imagenet_25_base",
