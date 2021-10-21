@@ -3,6 +3,8 @@ import numpy as np
 from ebano.batchebano import Explainer
 from qs import QueryStrategy
 
+from utils import Profiling
+
 class EBAnOQueryStrategy(QueryStrategy):
     def __call__(self,
                  X_pool,
@@ -40,31 +42,29 @@ class EBAnOQueryStrategy(QueryStrategy):
             layers_to_analyze=layers_to_analyze,
         )
 
-        n_batches = len(X_pool) // query_batch_size + 1
-
+        n_batches = int(np.ceil(len(X_pool) / query_batch_size))
         for i in range(n_batches):
             batch_len = len(X_pool[i*query_batch_size:(i+1)*query_batch_size])
-            if batch_len == 0:  # skip last batch if empty
+            if batch_len == 0:  # skip batch if empty
                 print("Empty batch")
                 pass
 
-            print(f"Processing batch {i+1}/{n_batches} of size {batch_len}")
-
-            nPIR_best_batch, nPIRP_best_batch = explainer.fit_batch(
-                X_pool[i*query_batch_size:(i+1)*query_batch_size],
-                cois=cois[i*query_batch_size:(i+1)*query_batch_size],
-                preprocess_input_fn=self.preprocess_input_fn,  # data is already preprocessed
-                hypercolumn_features=hypercolumn_features,
-                hypercolumn_reduction=hypercolumn_reduction,
-                clustering=clustering,
-                min_features=min_features,
-                max_features=max_features,
-                display_plots=False,
-                return_indices=True,
-                use_gpu=False,
-                seed=seed,
-                niter=ebano_kwargs["niter"],
-            )
+            with Profiling(f"Processing batch {i+1}/{n_batches} of size {batch_len}"):
+                nPIR_best_batch, nPIRP_best_batch = explainer.fit_batch(
+                    X_pool[i*query_batch_size:(i+1)*query_batch_size],
+                    cois=cois[i*query_batch_size:(i+1)*query_batch_size],
+                    preprocess_input_fn=self.preprocess_input_fn,  # data is already preprocessed
+                    hypercolumn_features=hypercolumn_features,
+                    hypercolumn_reduction=hypercolumn_reduction,
+                    clustering=clustering,
+                    min_features=min_features,
+                    max_features=max_features,
+                    display_plots=False,
+                    return_indices=True,
+                    use_gpu=False,
+                    seed=seed,
+                    niter=ebano_kwargs["niter"],
+                )
 
             nPIR_best.extend(nPIR_best_batch)
             nPIRP_best.extend(nPIRP_best_batch)
@@ -77,13 +77,12 @@ class EBAnOQueryStrategy(QueryStrategy):
             idx_query = rng.choice(idx_candidates, size=n_query_instances, replace=False)
         elif len(idx_candidates) < n_query_instances:
             # If too few candidates, add more by selecting among non-candidates
-            idx_others = np.arange(len(X_pool))
-            np.delete(idx_others, idx_candidates)
+            idx_others = np.delete(np.arange(len(X_pool)), idx_candidates)
 
             rng = np.random.default_rng(seed)
             idx_additional = rng.choice(idx_others, size=(n_query_instances-len(idx_candidates)), replace=False)
 
-            idx_query = np.concatenate(idx_candidates, idx_additional)
+            idx_query = np.concatenate([idx_candidates, idx_additional])
         else:
             idx_query = idx_candidates
 
@@ -94,7 +93,9 @@ class EBAnOQueryStrategy(QueryStrategy):
         """
         Select samples whose most influential interpretable feature on the class
         of interest, i.e., the feature that has highest nPIR, is not focused on
-        the class of interest, i.e., it has low associated nPIRP.
+        the class of interest, i.e., it has low associated nPIRP. Only choose
+        samples whose most influential interpretable feature has nPIR above 0
+        (most samples satisfy this requirement).
         """
 
         assert len(nPIR) == len(nPIRP)
@@ -109,7 +110,7 @@ class EBAnOQueryStrategy(QueryStrategy):
 
         candidates = []
         for i in range(n):
-            if nPIR_max > 0. and nPIRP_of_nPIR_max < 0.:
+            if nPIR_max[i] > 0. and nPIRP_of_nPIR_max[i] < 0.:
                 candidates.append(i)
 
-        return np.array(candidates)
+        return np.array(candidates, dtype=int)
