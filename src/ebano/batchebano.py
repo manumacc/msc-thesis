@@ -6,13 +6,13 @@ from sklearn.cluster import KMeans, MiniBatchKMeans
 from sklearn.decomposition import TruncatedSVD, PCA
 from sklearn.preprocessing import normalize
 from tensorflow.keras.layers import Conv2D
-import tensorflow.keras.backend as K
+from tensorflow.keras import Model
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import faiss
 
 import utils
-from utils import pil_to_ndarray, ndarray_to_pil
+from utils import Profiling, pil_to_ndarray, ndarray_to_pil
 
 
 class Explainer:
@@ -39,6 +39,10 @@ class Explainer:
         layer_indexes = layer_idx[-layers_to_analyze:]
         self.layers = [self.model.layers[li].output for li in layer_indexes]
 
+        # Create model to extract intermediate layers of interest (i.e. self.layers)
+        self.extractor = Model(inputs=self.model.inputs,
+                               outputs=self.layers)
+
     @staticmethod
     def _get_conv_layer_indexes(model):
         layer_indexes = []
@@ -52,7 +56,9 @@ class Explainer:
 
     def get_hypercolumns(self, X):
         # Extract activations for each layer to analyze
-        activations = K.function([self.model.layers[0].input], self.layers)(X)  # list of len(self.layers)
+        with Profiling("getting activations"):
+            activations = self.extractor(X)  # list of len(self.layers)
+            activations = [a.numpy() for a in activations]
 
         # Preallocate array of hypercolumns
         n_filters = sum([a.shape[-1] for a in activations])
