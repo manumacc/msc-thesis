@@ -49,6 +49,9 @@ class ReduceLRRestoreOnPlateau(Callback):
         self.wait = 0
         self.decay_counter = 0
 
+    def on_train_begin(self, logs=None):
+        self._reset()
+
     def on_epoch_end(self, epoch, logs=None):
         logs = logs or {}
         logs['lr'] = backend.get_value(self.model.optimizer.lr)
@@ -69,14 +72,15 @@ class ReduceLRRestoreOnPlateau(Callback):
                     self.wait += 1
                     if self.wait >= self.patience:
                         old_lr = backend.get_value(self.model.optimizer.lr)
-                        new_lr = self.decay_schedule[self.decay_counter]
-                        backend.set_value(self.model.optimizer.lr, new_lr)
-
-                        if self.verbose > 0:
-                            print(f"Epoch {epoch + 1}: Set learning rate from {old_lr} to {new_lr}")
+                        new_lr = np.float32(self.decay_schedule[self.decay_counter])
 
                         print("Reload best weights")
                         self.model.load_weights(self.best_model_path)
+
+                        backend.set_value(self.model.optimizer.lr, new_lr)
+                        if self.verbose > 0:
+                            print(f"Epoch {epoch + 1}: Set learning rate from {old_lr} to {new_lr}")
+
                         print(f"Decay counter: {self.decay_counter+1}/{self.decay_times}")
                         self.decay_counter += 1
                         self.wait = 0
@@ -84,5 +88,6 @@ class ReduceLRRestoreOnPlateau(Callback):
     def on_train_end(self, logs=None):
         print("Reload best weights")
         self.model.load_weights(self.best_model_path)
+        print("!", backend.get_value(self.model.optimizer.lr))
 
         super().on_train_end(logs)
