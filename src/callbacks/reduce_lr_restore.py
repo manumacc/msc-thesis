@@ -88,6 +88,5 @@ class ReduceLRRestoreOnPlateau(Callback):
     def on_train_end(self, logs=None):
         print("Reload best weights")
         self.model.load_weights(self.best_model_path)
-        print("!", backend.get_value(self.model.optimizer.lr))
 
         super().on_train_end(logs)
