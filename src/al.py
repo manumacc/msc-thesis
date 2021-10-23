@@ -204,12 +204,13 @@ class ActiveLearning:
         print("Loading base model weights")
         path_model = pathlib.Path("models", model_name, model_name)
         self.model.load_weights(path_model)
-        backend.set_value(self.model.optimizer.lr, lr_init)
 
         print("Compiling model")
         self.model.compile(optimizer=optimizer,
                            loss=loss_fn,
                            metrics=["accuracy"])
+
+        backend.set_value(self.model.optimizer.lr, lr_init)
 
     def get_train(self, preprocess=True, seed=None):
         """Get current training dataset along with the validation set."""
