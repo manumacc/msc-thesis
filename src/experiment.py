@@ -54,19 +54,20 @@ class Experiment:
                 loss_fn = tf.keras.losses.CategoricalCrossentropy()
 
             optimizer = None
+            lr_init = self.config["lr_init"] if not base else self.config["base_lr_init"]
             if self.config["optimizer"] == "SGDW":
                 optimizer = tfa.optimizers.SGDW(
-                    learning_rate=self.config["lr_init"] if not base else self.config["base_lr_init"],
+                    learning_rate=lr_init,
                     momentum=self.config["momentum"],
                     weight_decay=self.config["weight_decay"] if not base else self.config["base_weight_decay"]
                 )
             if self.config["optimizer"] == "RMSprop":
                 optimizer = tf.keras.optimizers.RMSprop(
-                    learning_rate=self.config["lr_init"] if not base else self.config["base_lr_init"],
+                    learning_rate=lr_init,
                     decay=self.config["weight_decay"] if not base else self.config["base_weight_decay"]
                 )
 
-            return model, loss_fn, optimizer
+            return model, loss_fn, optimizer, lr_init
 
         model_initialization_fn = model_initializer
 

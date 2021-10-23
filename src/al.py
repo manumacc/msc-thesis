@@ -5,6 +5,7 @@ import pickle
 
 import numpy as np
 from tensorflow.keras.datasets import cifar10
+from tensorflow.keras import backend
 
 from PIL import Image
 
@@ -195,7 +196,7 @@ class ActiveLearning:
         return X_train_init, y_train_init, X_val, y_val, X_pool, y_pool, X_test, y_test
 
     def initialize_base_model(self, model_name):
-        self.model, loss_fn, optimizer = self.model_initialization_fn()
+        self.model, loss_fn, optimizer, lr_init = self.model_initialization_fn()
 
         print("Optimizer configuration")
         print(optimizer.get_config())
@@ -203,6 +204,7 @@ class ActiveLearning:
         print("Loading base model weights")
         path_model = pathlib.Path("models", model_name, model_name)
         self.model.load_weights(path_model)
+        backend.set_value(self.model.optimizer.lr, lr_init)
 
         print("Compiling model")
         self.model.compile(optimizer=optimizer,
@@ -329,7 +331,7 @@ class ActiveLearning:
             print(f"* Iteration #{i+1}")
 
             if i > 0:
-                self.model, loss_fn, optimizer = self.model_initialization_fn()
+                self.model, loss_fn, optimizer, lr_init = self.model_initialization_fn()
 
                 print("Optimizer configuration")
                 print(optimizer.get_config())
@@ -340,6 +342,7 @@ class ActiveLearning:
 
                 print("Setting weights to last iteration weights")
                 self.model.set_weights(self.model_weights_checkpoint)
+                backend.set_value(self.model.optimizer.lr, lr_init)
 
             X_pool, idx_pool = self.get_pool(preprocess=False)
             print("Querying")
@@ -383,7 +386,7 @@ class ActiveLearning:
 
         logs = {"train": [], "test": None}
 
-        model, loss_fn, optimizer = self.model_initialization_fn(base=True)
+        model, loss_fn, optimizer, _ = self.model_initialization_fn(base=True)
 
         print("Optimizer configuration")
         print(optimizer.get_config())
