@@ -69,7 +69,10 @@ class EBAnOQueryStrategy(QueryStrategy):
             nPIR_best.extend(nPIR_best_batch)
             nPIRP_best.extend(nPIRP_best_batch)
 
-        idx_candidates = self.query_most_influential_has_low_precision(nPIR_best, nPIRP_best)
+        eps = 0.3
+        idx_candidates = self.query_most_influential_has_low_precision(nPIR_best, nPIRP_best, eps=eps)
+
+        print(f"Candidates queried by EBAnO: {len(idx_candidates)} with epsilon={eps}")
 
         if len(idx_candidates) > n_query_instances:
             # If too many candidates, randomly choose among them
@@ -89,7 +92,7 @@ class EBAnOQueryStrategy(QueryStrategy):
         return idx_query
 
     @staticmethod
-    def query_most_influential_has_low_precision(nPIR, nPIRP):
+    def query_most_influential_has_low_precision(nPIR, nPIRP, eps=0.):
         """
         Select samples whose most influential interpretable feature on the class
         of interest, i.e., the feature that has highest nPIR, is not focused on
@@ -110,7 +113,7 @@ class EBAnOQueryStrategy(QueryStrategy):
 
         candidates = []
         for i in range(n):
-            if nPIR_max[i] > 0. and nPIRP_of_nPIR_max[i] < 0.:
+            if nPIR_max[i] > 0. and nPIRP_of_nPIR_max[i] < (0. + eps):
                 candidates.append(i)
 
         return np.array(candidates, dtype=int)
