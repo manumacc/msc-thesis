@@ -158,12 +158,10 @@ class Experiment:
                 callbacks.append(callback_checkpoint)
                 callback_decay = ReduceLRRestoreOnPlateau(
                     best_model_path=best_model_checkpoint_path,
-                    monitor='val_loss',
-                    factor=self.config["base_reduce_lr_factor"],
+                    decay_schedule=self.config["base_reduce_lr_decay_schedule"],
                     patience=self.config["base_reduce_lr_patience"],
-                    cooldown=self.config["base_reduce_lr_cooldown"],
                     min_delta=self.config["base_reduce_lr_min_delta"],
-                    decay_times=self.config["base_reduce_lr_decay_times"],
+                    monitor='val_loss',
                     verbose=1,
                 )
                 callbacks.append(callback_decay)
@@ -203,12 +201,10 @@ class Experiment:
                 callbacks.append(callback_checkpoint)
                 callback_decay = ReduceLRRestoreOnPlateau(
                     best_model_path=best_model_checkpoint_path,
-                    monitor='val_loss',
-                    factor=self.config["reduce_lr_factor"],
+                    decay_schedule=self.config["reduce_lr_decay_schedule"],
                     patience=self.config["reduce_lr_patience"],
-                    cooldown=self.config["reduce_lr_cooldown"],
                     min_delta=self.config["reduce_lr_min_delta"],
-                    decay_times=self.config["reduce_lr_decay_times"],
+                    monitor='val_loss',
                     verbose=1,
                 )
                 callbacks.append(callback_decay)

@@ -48,10 +48,8 @@ config_dict = {
 
     # decay_early_stopping
     "reduce_lr_patience": 20,
-    "reduce_lr_factor": 0.1,
+    "reduce_lr_decay_schedule": [0.001, 0.0001, 0.00001],
     "reduce_lr_min_delta": 0.01,  # Empirically set for ResNet
-    "reduce_lr_cooldown": 0,
-    "reduce_lr_decay_times": 3,  # Decay LR N times
 
     # Query strategy arguments
     "n_query_instances": 2000,  # Number of instances to add at each iteration
@@ -69,15 +67,15 @@ config_dict = {
 
     # Mix query strategy arguments
     "mix_iteration_methods": {
-        0: "margin-sampling",  # 20000 -> 18000
-        1: "margin-sampling",  # 18000 -> 16000
-        2: "margin-sampling",  # 16000 -> 14000
-        3: "margin-sampling",  # 14000 -> 12000
-        4: "margin-sampling",  # 12000 -> 10000
-        5: "ebano",  # 10000 -> 8000
-        6: "ebano",  # 8000 -> 6000
-        7: "ebano",  # 6000 -> 4000
-        8: "margin-sampling",  # 4000 -> 2000
+        0: "random",  # 20000 -> 18000
+        1: "ebano",  # 18000 -> 16000
+        2: "ebano",  # 16000 -> 14000
+        3: "ebano",  # 14000 -> 12000
+        4: "ebano",  # 12000 -> 10000
+        5: "random",  # 10000 -> 8000
+        6: "random",  # 8000 -> 6000
+        7: "random",  # 6000 -> 4000
+        8: "random",  # 4000 -> 2000
         9: "random",  # 2000 -> 0 (i.e., take all)
     },
 
@@ -95,8 +93,6 @@ config_dict = {
     ],
 
     "base_reduce_lr_patience": 50,
-    "base_reduce_lr_factor": 0.1,
+    "base_reduce_lr_decay_schedule": [0.01, 0.001],
     "base_reduce_lr_min_delta": 0.01,  # Empirically set for ResNet
-    "base_reduce_lr_cooldown": 0,
-    "base_reduce_lr_decay_times": 2,  # Decay LR N times
 }
