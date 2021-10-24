@@ -79,8 +79,7 @@ class EBAnOQueryStrategy(QueryStrategy):
                 if augment:
                     X_masks.append(r["X_masks"])
 
-        candidates, nPIR_max_idx = self.query_most_influential_has_low_precision(nPIR_best, nPIRP_best, eps=eps)
-        idx_candidates = np.arange(len(candidates))[candidates]
+        idx_candidates, nPIR_max_idx = self.query_most_influential_has_low_precision(nPIR_best, nPIRP_best, eps=eps)
 
         print(f"Candidates queried by EBAnO: {len(idx_candidates)} with epsilon={eps}")
 
@@ -100,6 +99,7 @@ class EBAnOQueryStrategy(QueryStrategy):
             idx_query = idx_candidates
 
         if augment:  # Create augmented dataset
+            print("Create augmented set")
             X_augmented_set = []
             y_augmented_set = []
             for i in idx_candidates:
@@ -144,14 +144,12 @@ class EBAnOQueryStrategy(QueryStrategy):
             nPIRP_of_nPIR_max[i] = nPIRP[i][idx]
             nPIR_max_idx[i] = idx
 
-        candidates = np.empty(n, dtype=bool)
+        idx_candidates = []
         for i in range(n):
             if nPIR_max[i] > 0. and nPIRP_of_nPIR_max[i] < (0. + eps):
-                candidates[i] = True
-            else:
-                candidates[i] = False
+                idx_candidates.append(i)
 
-        return candidates, nPIR_max_idx
+        return idx_candidates, nPIR_max_idx
 
     @staticmethod
     def get_perturbed_image(x_original, x_masks, f_i, perturb_filter=None):
