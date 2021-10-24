@@ -123,6 +123,8 @@ class Experiment:
                     "min_features": self.config["min_features"],
                     "max_features": self.config["max_features"],
                     "use_gpu": self.config["ebano_use_gpu"],
+                    "eps": self.config["eps"],
+                    "augment": self.config["augment"],
                     "niter": self.config["kmeans_niter"]
                 }
 

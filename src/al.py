@@ -28,6 +28,7 @@ class ActiveLearning:
                  save_models=False,
                  dataset_seed=None):
         self.query_strategy = query_strategy
+        self.X_augmented_set, self.y_augmented_set = None, None
 
         self.model = None
         self.model_weights_checkpoint = None
@@ -216,9 +217,15 @@ class ActiveLearning:
         """Get current training dataset along with the validation set."""
 
         print("Getting current training set")
-        print("Concatenating X_train_init and labeled pool")
-        X_train = np.concatenate([self.X_train_init, self.X_pool[self.idx_queried]])
-        y_train = np.concatenate([self.y_train_init, self.y_pool[self.idx_queried]])
+        if self.X_augmented_set:
+            print("Concatenating X_train_init, labeled pool and augmentation data")
+            X_train = np.concatenate([self.X_train_init, self.X_pool[self.idx_queried], self.X_augmented_set])
+            y_train = np.concatenate([self.y_train_init, self.y_pool[self.idx_queried], self.y_augmented_set])
+            print(f"Augmentation data: {self.X_augmented_set.shape}, {self.y_augmented_set.shape}")
+        else:
+            print("Concatenating X_train_init and labeled pool")
+            X_train = np.concatenate([self.X_train_init, self.X_pool[self.idx_queried]])
+            y_train = np.concatenate([self.y_train_init, self.y_pool[self.idx_queried]])
         print(f"Shape of current train: {X_train.shape} labels {y_train.shape}")
 
         print("Shuffling training dataset")
@@ -246,14 +253,15 @@ class ActiveLearning:
 
         print("Getting current pool")
         X_pool = np.delete(self.X_pool, self.idx_queried, axis=0)
+        y_pool = np.delete(self.y_pool, self.idx_queried)
         idx_pool = np.delete(np.arange(0, len(self.X_pool)), self.idx_queried)
-        print(f"Size of current pool: {X_pool.shape}")
+        print(f"Size of current pool: {X_pool.shape} target {y_pool.shape}")
 
         if preprocess:
             print("Preprocessing X_pool")
             X_pool = self._prepare_dataset(X_pool)
 
-        return X_pool, idx_pool
+        return X_pool, y_pool, idx_pool
 
     def get_test(self, preprocess=True):
         X_test = np.copy(self.X_test)
@@ -280,11 +288,13 @@ class ActiveLearning:
         self.idx_queried_last = idx
         print(f"Total amount of queried samples post-query: {len(self.idx_queried)}")
 
-    def query(self, X_pool, n_query_instances, current_iter, seed=None, **query_kwargs):
+    def query(self, X_pool, y_pool, n_query_instances, current_iter, seed=None, **query_kwargs):
         """Call to query strategy function"""
 
         self.query_strategy.set_model(self.model, self.preprocess_input_fn)
-        return self.query_strategy(X_pool, n_query_instances, current_iter, seed=seed, **query_kwargs)
+        idx_query = self.query_strategy(X_pool, y_pool, n_query_instances, current_iter, seed=seed, **query_kwargs)
+        self.X_augmented_set, self.y_augmented_set = self.query_strategy.get_augmented()
+        return idx_query
 
     def learn(self,
               n_loops,
@@ -345,9 +355,9 @@ class ActiveLearning:
                 self.model.set_weights(self.model_weights_checkpoint)
                 backend.set_value(self.model.optimizer.lr, lr_init)
 
-            X_pool, idx_pool = self.get_pool(preprocess=False)
+            X_pool, y_pool, idx_pool = self.get_pool(preprocess=False)
             print("Querying")
-            idx_query = self.query(X_pool, n_query_instances, current_iter=i, seed=seed, **query_kwargs)
+            idx_query = self.query(X_pool, y_pool, n_query_instances, current_iter=i, seed=seed, **query_kwargs)
             print(f"Queried {len(idx_query)} samples.")
             self.add_to_train(idx_pool[idx_query])
             del X_pool, idx_query

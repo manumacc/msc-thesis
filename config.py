@@ -64,6 +64,8 @@ config_dict = {
     "min_features": 2,
     "max_features": 5,
     "ebano_use_gpu": False,
+    "eps": 0.3,
+    "augment": False,
 
     # Mix query strategy arguments
     "mix_iteration_methods": {

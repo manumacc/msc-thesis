@@ -5,6 +5,7 @@ from qs import QueryStrategy
 class MixQueryStrategy(QueryStrategy):
     def __call__(self,
                  X_pool,
+                 y_pool,
                  n_query_instances,
                  current_iter,
                  seed=None,

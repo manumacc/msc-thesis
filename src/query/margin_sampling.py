@@ -3,7 +3,7 @@ import numpy as np
 from qs import QueryStrategy
 
 class MarginSamplingQueryStrategy(QueryStrategy):
-    def __call__(self, X_pool, n_query_instances, current_iter, seed=None, query_batch_size=None):
+    def __call__(self, X_pool, y_pool, n_query_instances, current_iter, seed=None, query_batch_size=None):
         """Selects the instances whose margin is smallest.
 
         The margin for a given instance is defined as the difference between the
