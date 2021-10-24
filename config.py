@@ -53,7 +53,7 @@ config_dict = {
 
     # Query strategy arguments
     "n_query_instances": 2000,  # Number of instances to add at each iteration
-    "query_batch_size": 256,  # Batch size for unlabeled pool iterator. Set to a low size for EBAnO.
+    "query_batch_size": 64,  # Batch size for unlabeled pool iterator. Set to a low size for EBAnO.
 
     # EBAnO query strategy arguments
     "layers_to_analyze": 3,

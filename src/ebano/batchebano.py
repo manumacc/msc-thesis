@@ -399,7 +399,6 @@ class Explainer:
                   min_features=2,
                   max_features=5,
                   display_plots=True,
-                  return_indices=False,
                   return_results=False,
                   use_gpu=False,
                   seed=None,
@@ -418,7 +417,6 @@ class Explainer:
             max_features:
             display_plots: If True, create and display visual explanations.
                 Otherwise, only compute indices.
-            return_indices:
             return_results:
             use_gpu:
             seed: Seed for reproducibility.
@@ -459,16 +457,6 @@ class Explainer:
                 image_i = utils.ndarray_to_pil(X[i])
                 self.explain_visual(image_i, cois[i], X_masks[i][mask], nPIR[i][mask], nPIRP[i][mask])
 
-        if return_indices:
-            nPIR_best = []
-            nPIRP_best = []
-            for i in range(len(X)):
-                best_mask = X_masks_map == best[i]
-                nPIR_best.append(nPIR[i][best_mask])
-                nPIRP_best.append(nPIRP[i][best_mask])
-
-            return nPIR_best, nPIRP_best
-
         if return_results:
             # Fetch data for analysis
             # Returns (list of dicts):
@@ -484,7 +472,7 @@ class Explainer:
                 best_mask = X_masks_map == best[i]
                 results.append({
                     "X_original": X[i],
-                    "truth": y[i],
+                    "truth": y[i] if y is not None else None,
                     "preds": preds_original[i],
                     "best_n_features": best[i]+min_features,
                     "X_masks": X_masks[i][best_mask],

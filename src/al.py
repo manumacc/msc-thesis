@@ -217,7 +217,7 @@ class ActiveLearning:
         """Get current training dataset along with the validation set."""
 
         print("Getting current training set")
-        if self.X_augmented_set:
+        if self.X_augmented_set is not None:
             print("Concatenating X_train_init, labeled pool and augmentation data")
             X_train = np.concatenate([self.X_train_init, self.X_pool[self.idx_queried], self.X_augmented_set])
             y_train = np.concatenate([self.y_train_init, self.y_pool[self.idx_queried], self.y_augmented_set])
@@ -253,7 +253,7 @@ class ActiveLearning:
 
         print("Getting current pool")
         X_pool = np.delete(self.X_pool, self.idx_queried, axis=0)
-        y_pool = np.delete(self.y_pool, self.idx_queried)
+        y_pool = np.delete(self.y_pool, self.idx_queried, axis=0)
         idx_pool = np.delete(np.arange(0, len(self.X_pool)), self.idx_queried)
         print(f"Size of current pool: {X_pool.shape} target {y_pool.shape}")
 
@@ -293,7 +293,9 @@ class ActiveLearning:
 
         self.query_strategy.set_model(self.model, self.preprocess_input_fn)
         idx_query = self.query_strategy(X_pool, y_pool, n_query_instances, current_iter, seed=seed, **query_kwargs)
-        self.X_augmented_set, self.y_augmented_set = self.query_strategy.get_augmented()
+        augmented_set = self.query_strategy.get_augmented()
+        if augmented_set is not None:
+            self.X_augmented_set, self.y_augmented_set = augmented_set
         return idx_query
 
     def learn(self,
@@ -340,6 +342,9 @@ class ActiveLearning:
         # Active learning loop
         for i in range(n_loops):
             print(f"* Iteration #{i+1}")
+
+            # Reset augmented set
+            self.X_augmented_set, self.y_augmented_set = None, None
 
             if i > 0:
                 self.model, loss_fn, optimizer, lr_init = self.model_initialization_fn()

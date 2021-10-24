@@ -73,9 +73,11 @@ class EBAnOQueryStrategy(QueryStrategy):
                     niter=ebano_kwargs["niter"],
                 )
 
-            nPIR_best.extend(results["nPIR_best"])
-            nPIRP_best.extend(results["nPIR_best"])
-            X_masks.extend(results["X_masks"])
+            for r in results:
+                nPIR_best.append(r["nPIR_best"])
+                nPIRP_best.append(r["nPIR_best"])
+                if augment:
+                    X_masks.append(r["X_masks"])
 
         candidates, nPIR_max_idx = self.query_most_influential_has_low_precision(nPIR_best, nPIRP_best, eps=eps)
         idx_candidates = np.arange(len(candidates))[candidates]
