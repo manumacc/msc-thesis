@@ -13,9 +13,12 @@ class Experiment:
     def __init__(self, config):
         self.config = config
 
-    def run(self, name, query_strategy=None, train_base=False):
+    def run(self, name, query_strategy=None, train_base=False, ebano_augment=False):
         self.config["name"] = name
         self.config["query_strategy"] = query_strategy
+
+        if ebano_augment:
+            self.config["augment"] = True
 
         start_dt = datetime.datetime.now()
 
