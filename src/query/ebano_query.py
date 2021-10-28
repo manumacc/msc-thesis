@@ -75,7 +75,7 @@ class EBAnOQueryStrategy(QueryStrategy):
 
             for r in results:
                 nPIR_best.append(r["nPIR_best"])
-                nPIRP_best.append(r["nPIR_best"])
+                nPIRP_best.append(r["nPIRP_best"])
                 if augment:
                     X_masks.append(r["X_masks"])
 
