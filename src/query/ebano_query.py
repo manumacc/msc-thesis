@@ -152,7 +152,7 @@ class EBAnOQueryStrategy(QueryStrategy):
         return idx_candidates, nPIR_max_idx
 
     @staticmethod
-    def get_perturbed_image(x_original, x_masks, f_i, perturb_filter=None):
+    def get_perturbed_image(x_original, x_masks, f_i, perturb_filter=None, flip=False):
         x_original_pil = ndarray_to_pil(x_original)
         x_perturbed = x_original_pil.filter(perturb_filter)  # Fully perturbed image
 
@@ -168,6 +168,8 @@ class EBAnOQueryStrategy(QueryStrategy):
         # Apply mask
         x_mask_img = Image.fromarray(x_mask, mode="L")
         x_perturbed_f_i.paste(x_perturbed, mask=x_mask_img)
+        if flip:
+            x_perturbed_f_i = x_perturbed_f_i.transpose(Image.FLIP_LEFT_RIGHT)
         x_perturbed_f_i = pil_to_ndarray(x_perturbed_f_i)
 
         return x_perturbed_f_i
