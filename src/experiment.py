@@ -13,9 +13,12 @@ class Experiment:
     def __init__(self, config):
         self.config = config
 
-    def run(self, name, query_strategy=None, train_base=False, ebano_augment=False):
+    def run(self, name, query_strategy=None, train_base=False, ebano_augment=False, seed=None):
         self.config["name"] = name
         self.config["query_strategy"] = query_strategy
+
+        if seed is not None:
+            self.config["experiment_seed"] = seed
 
         if ebano_augment:
             self.config["augment"] = True
