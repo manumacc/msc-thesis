@@ -65,21 +65,6 @@ config_dict = {
     "max_features": 5,
     "ebano_use_gpu": False,
     "eps": 0.3,
-    "augment": False,
-
-    # Mix query strategy arguments
-    "mix_iteration_methods": {
-        0: "random",  # 20000 -> 18000
-        1: "ebano",  # 18000 -> 16000
-        2: "ebano",  # 16000 -> 14000
-        3: "ebano",  # 14000 -> 12000
-        4: "ebano",  # 12000 -> 10000
-        5: "random",  # 10000 -> 8000
-        6: "random",  # 8000 -> 6000
-        7: "random",  # 6000 -> 4000
-        8: "random",  # 4000 -> 2000
-        9: "random",  # 2000 -> 0 (i.e., take all)
-    },
 
     ## Base model
     "base_model_name": "resnet_imagenet_25_base",

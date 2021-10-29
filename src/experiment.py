@@ -13,15 +13,12 @@ class Experiment:
     def __init__(self, config):
         self.config = config
 
-    def run(self, name, query_strategy=None, train_base=False, ebano_augment=False, seed=None):
+    def run(self, name, query_strategy=None, train_base=False, seed=None):
         self.config["name"] = name
         self.config["query_strategy"] = query_strategy
 
         if seed is not None:
             self.config["experiment_seed"] = seed
-
-        if ebano_augment:
-            self.config["augment"] = True
 
         start_dt = datetime.datetime.now()
 
@@ -92,33 +89,86 @@ class Experiment:
         query_strategy = None
         query_kwargs = {}
         if not train_base:
+            qs = self.config["query_strategy"]  # shorthand
+
             # Query strategy
-            if self.config["query_strategy"] == "random":
+            if qs == "random":
                 from query.random import RandomQueryStrategy
                 query_strategy = RandomQueryStrategy()
-            elif self.config["query_strategy"] == "least-confident":
+            elif qs == "least-confident":
                 from query.least_confident import LeastConfidentQueryStrategy
                 query_strategy = LeastConfidentQueryStrategy()
                 query_kwargs = {
                     "query_batch_size": self.config["query_batch_size"],
                 }
-            elif self.config["query_strategy"] == "margin-sampling":
+            elif qs == "margin-sampling":
                 from query.margin_sampling import MarginSamplingQueryStrategy
                 query_strategy = MarginSamplingQueryStrategy()
                 query_kwargs = {
                     "query_batch_size": self.config["query_batch_size"],
                 }
-            elif self.config["query_strategy"] == "entropy":
+            elif qs == "entropy":
                 from query.entropy import EntropyQueryStrategy
                 query_strategy = EntropyQueryStrategy()
                 query_kwargs = {
                     "query_batch_size": self.config["query_batch_size"],
                 }
-            elif self.config["query_strategy"] == "mix":
+            elif qs in ["early-mix", "late-mix", "full-mix", "augment-early-mix", "augment-late-mix", "augment-full-mix"]:
                 from query.mix import MixQueryStrategy
                 query_strategy = MixQueryStrategy()
+
+                mix_iteration_methods = None
+                if qs in ["early-mix", "augment-early-mix"]:
+                    mix_iteration_methods = {
+                        0: "random",  # 20000 -> 18000
+                        1: "ebano",  # 18000 -> 16000
+                        2: "ebano",  # 16000 -> 14000
+                        3: "ebano",  # 14000 -> 12000
+                        4: "ebano",  # 12000 -> 10000
+                        5: "random",  # 10000 -> 8000
+                        6: "random",  # 8000 -> 6000
+                        7: "random",  # 6000 -> 4000
+                        8: "random",  # 4000 -> 2000
+                        9: "random",  # 2000 -> 0 (i.e., take all)
+                    }
+                elif qs in ["late-mix", "augment-late-mix"]:
+                    mix_iteration_methods = {
+                        0: "random",  # 20000 -> 18000
+                        1: "random",  # 18000 -> 16000
+                        2: "random",  # 16000 -> 14000
+                        3: "random",  # 14000 -> 12000
+                        4: "random",  # 12000 -> 10000
+                        5: "ebano",  # 10000 -> 8000
+                        6: "ebano",  # 8000 -> 6000
+                        7: "ebano",  # 6000 -> 4000
+                        8: "ebano",  # 4000 -> 2000
+                        9: "ebano",  # 2000 -> 0 (i.e., take all)
+                    }
+                elif qs in ["full-mix", "augment-full-mix"]:
+                    mix_iteration_methods = {
+                        0: "ebano",  # 20000 -> 18000
+                        1: "ebano",  # 18000 -> 16000
+                        2: "ebano",  # 16000 -> 14000
+                        3: "ebano",  # 14000 -> 12000
+                        4: "ebano",  # 12000 -> 10000
+                        5: "ebano",  # 10000 -> 8000
+                        6: "ebano",  # 8000 -> 6000
+                        7: "ebano",  # 6000 -> 4000
+                        8: "ebano",  # 4000 -> 2000
+                        9: "ebano",  # 2000 -> 0 (i.e., take all)
+                    }
+
+                ebano_augment = None
+                if qs in ["early-mix", "late-mix", "full-mix"]:
+                    ebano_augment = False
+                elif qs in ["augment-early-mix", "augment-late-mix", "augment-full-mix"]:
+                    ebano_augment = True
+
+                print("Mix iteration methods:", mix_iteration_methods)
+                print("Augment flag:", ebano_augment)
+
                 query_kwargs = {
-                    "mix_iteration_methods": self.config["mix_iteration_methods"],
+                    "mix_iteration_methods": mix_iteration_methods,
                     "query_batch_size": self.config["query_batch_size"],
                     "n_classes": self.config["n_classes"],
                     "input_shape": target_size,
@@ -130,7 +180,7 @@ class Experiment:
                     "max_features": self.config["max_features"],
                     "use_gpu": self.config["ebano_use_gpu"],
                     "eps": self.config["eps"],
-                    "augment": self.config["augment"],
+                    "augment": ebano_augment,
                     "niter": self.config["kmeans_niter"]
                 }
 
