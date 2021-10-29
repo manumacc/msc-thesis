@@ -64,7 +64,7 @@ config_dict = {
     "min_features": 2,
     "max_features": 5,
     "ebano_use_gpu": False,
-    "eps": 0.3,
+    "eps": 0.1,
 
     ## Base model
     "base_model_name": "resnet_imagenet_25_base",
