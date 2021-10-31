@@ -23,8 +23,13 @@ class EBAnOQueryStrategy(QueryStrategy):
                  min_features=2,
                  max_features=5,
                  use_gpu=False,
-                 eps=0.3,
-                 augment=False,
+                 augment=None,
+                 strategy=None,
+                 base_strategy=None,
+                 query_limit=None,
+                 augment_limit=None,
+                 min_diff=None,
+                 eps=None,
                  **ebano_kwargs):
 
         self.augmented_set = None  # reset augmented set
@@ -79,41 +84,66 @@ class EBAnOQueryStrategy(QueryStrategy):
                 if augment:
                     X_masks.append(r["X_masks"])
 
-        idx_candidates, nPIR_max_idx = self.query_most_influential_has_low_precision(nPIR_best, nPIRP_best, eps=eps)
+        assert len(nPIR_best) == len(nPIRP_best)
 
-        print(f"Candidates queried by EBAnO: {len(idx_candidates)} with epsilon={eps}")
-
-        if len(idx_candidates) > n_query_instances:
-            # If too many candidates, randomly choose among them
-            rng = np.random.default_rng(seed)
-            idx_query = idx_candidates = rng.choice(idx_candidates, size=n_query_instances, replace=False)
-        elif len(idx_candidates) < n_query_instances:
-            # If too few candidates, add more by selecting among non-candidates
-            idx_others = np.delete(np.arange(len(X_pool)), idx_candidates)
-
-            rng = np.random.default_rng(seed)
-            idx_additional = rng.choice(idx_others, size=(n_query_instances-len(idx_candidates)), replace=False)
-
-            idx_query = np.concatenate([idx_candidates, idx_additional])
+        # EBAnO query
+        if strategy == "rank":
+            idx_candidates, nPIR_max_f_i = self.query_most_influential_has_low_precision_difference_rank(nPIR_best, nPIRP_best, min_diff=min_diff)
+            print(f"Candidates queried by EBAnO: {len(idx_candidates)} with diff={min_diff}")
         else:
-            idx_query = idx_candidates
+            idx_candidates, nPIR_max_f_i = self.query_most_influential_has_low_precision(nPIR_best, nPIRP_best, eps=eps)
+            np.random.default_rng(seed).shuffle(idx_candidates)  # shuffle to eventually randomly choose a subset
+            print(f"Candidates queried by EBAnO: {len(idx_candidates)} with epsilon={eps}")
+
+        # Limit number of candidates queried by EBAnO
+        if query_limit > n_query_instances:
+            query_limit = n_query_instances
+            print(f"WARNING: query_limit set to {n_query_instances}")
+        if augment_limit > n_query_instances:
+            augment_limit = n_query_instances
+            print(f"WARNING: augment_limit set to {n_query_instances}")
+
+        idx_query_ebano = idx_candidates[:query_limit]
+
+        # Mix EBAnO query with chosen base strategy
+        if len(idx_query_ebano) < n_query_instances:  # If too few queried by EBAnO, add more by selecting among non-candidates using base_strategy
+            idx_others = np.delete(np.arange(len(X_pool)), idx_query_ebano)
+            n_missing = n_query_instances - len(idx_query_ebano)
+
+            if base_strategy == "random":
+                rng = np.random.default_rng(seed)
+                idx_additional = rng.choice(idx_others, size=n_missing, replace=False)
+            elif base_strategy == "least-confident":
+                max_preds = preds.max(axis=1)
+                idx_idx_others_sorted = np.argsort(max_preds[idx_others])
+                idx_additional = idx_others[idx_idx_others_sorted][:n_missing]
+            else:
+                raise ValueError(f"Base strategy {base_strategy} not implemented.")
+
+            idx_query = np.concatenate([idx_query_ebano, idx_additional])
+        else:
+            idx_query = idx_query_ebano
 
         if augment:  # Create augmented dataset
             print("Create augmented set")
+
+            idx_augment = idx_candidates[:augment_limit]  # Limit number of candidates queried by EBAnO
+
             X_augmented_set = []
             y_augmented_set = []
-            for i in idx_candidates:
+            for i in idx_augment:
                 x_original = X_pool[i]
 
                 x_masks = X_masks[i]
-                f_i = nPIR_max_idx[i]
-                x_perturbed = self.get_perturbed_image(x_original, x_masks, f_i, perturb_filter=explainer.perturb_filter)
+                f_i = nPIR_max_f_i[i]
+                x_perturbed = self.get_perturbed_image(x_original, x_masks, f_i, perturb_filter=explainer.perturb_filter, flip=True)
 
                 X_augmented_set.append(x_perturbed)
                 y_augmented_set.append(y_pool[i])
 
             X_augmented_set = np.array(X_augmented_set)
             y_augmented_set = np.array(y_augmented_set)
+
             self.augmented_set = (X_augmented_set, y_augmented_set)
 
         return idx_query
@@ -127,29 +157,64 @@ class EBAnOQueryStrategy(QueryStrategy):
         samples whose most influential interpretable feature has nPIR above 0
         (most samples satisfy this requirement).
 
-        Returns a mask over n, with True corresponding to selected samples. Returns
-        an array of shape (n,) containing the indices of the interpretable feature
-        corresponding to the highest nPIR for each image.
+        Returns a list of indices corresponding to queried images.
+        Returns an array of shape (n,) containing the indices of the
+        interpretable feature corresponding to the highest nPIR for each image.
         """
 
-        assert len(nPIR) == len(nPIRP)
         n = len(nPIR)
 
         nPIR_max = np.empty(n)
         nPIRP_of_nPIR_max = np.empty(n)
-        nPIR_max_idx = np.empty(n, dtype=int)
+        nPIR_max_f_i = np.empty(n, dtype=int)
         for i in range(n):
             idx = np.argmax(nPIR[i])
             nPIR_max[i] = nPIR[i][idx]
             nPIRP_of_nPIR_max[i] = nPIRP[i][idx]
-            nPIR_max_idx[i] = idx
+            nPIR_max_f_i[i] = idx
 
         idx_candidates = []
         for i in range(n):
             if nPIR_max[i] > 0. and nPIRP_of_nPIR_max[i] < (0. + eps):
                 idx_candidates.append(i)
 
-        return idx_candidates, nPIR_max_idx
+        return idx_candidates, nPIR_max_f_i
+
+    @staticmethod
+    def query_most_influential_has_low_precision_difference_rank(nPIR, nPIRP, min_diff=0.):
+        """
+        Selects samples with the highest difference between their maximum nPIR
+        i.e., the nPIR corresponding to the most influential feature, and the
+        associated nPIRP. Samples are ranked from highest to lowest difference.
+        The goal is to select samples whose most influential interpretable
+        feature has highest nPIR and lowest nPIRP.
+
+        Returns a sorted (n,) array of indices corresponding to queried images,
+        from best-to-query to worst-to-query.
+        Returns an array of shape (n,) containing the indices of the
+        interpretable feature corresponding to the highest nPIR for each image.
+        """
+
+        n = len(nPIR)
+
+        margin = np.empty(n)
+        nPIR_max_f_i = np.empty(n, dtype=int)
+        for i in range(n):
+            idx = np.argmax(nPIR[i])
+            nPIR_max_i = nPIR[i][idx]
+            nPIRP_of_nPIR_max_i = nPIRP[i][idx]
+            margin[i] = nPIR_max_i - nPIRP_of_nPIR_max_i
+            nPIR_max_f_i[i] = idx
+
+        idx = np.arange(n)
+        mask = margin > min_diff  # create mask without samples under minimum diff
+        margin_masked = margin[mask]  # remove samples under min diff
+        idx_masked = idx[mask]  # remove idx of samples under min diff
+
+        idx_margin_mask_sorted = np.argsort(margin_masked)[::-1]  # in order of best-to-query to worst-to-query
+        idx_candidates = idx_masked[idx_margin_mask_sorted]  # retrieve real indices from masked idx array
+
+        return idx_candidates, nPIR_max_f_i
 
     @staticmethod
     def get_perturbed_image(x_original, x_masks, f_i, perturb_filter=None, flip=False):

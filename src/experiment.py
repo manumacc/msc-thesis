@@ -13,7 +13,7 @@ class Experiment:
     def __init__(self, config):
         self.config = config
 
-    def run(self, name, query_strategy=None, train_base=False, seed=None):
+    def run(self,name, seed=None, train_base=False, query_strategy=None, **kwargs):
         self.config["name"] = name
         self.config["query_strategy"] = query_strategy
 
@@ -113,36 +113,86 @@ class Experiment:
                 query_kwargs = {
                     "query_batch_size": self.config["query_batch_size"],
                 }
-            elif qs in ["early-mix", "late-mix", "full-mix", "augment-early-mix", "augment-late-mix", "augment-full-mix"]:
+            elif qs in ["early-mix",
+                        "augment-early-mix",
+                        "late-mix",
+                        "augment-late-mix",
+                        "mid-mix",
+                        "augment-mid-mix",
+                        "full-mix",
+                        "augment-full-mix"]:
                 from query.mix import MixQueryStrategy
                 query_strategy = MixQueryStrategy()
+
+                if kwargs["ebano_mix_strategy"] is not None:
+                    ebano_mix_strategy = kwargs["ebano_mix_strategy"]
+                else:
+                    ebano_mix_strategy = self.config["ebano_mix_default_strategy"]
+
+                if kwargs["ebano_mix_base_strategy"] is not None:
+                    ebano_mix_base_strategy = kwargs["ebano_mix_base_strategy"]
+                else:
+                    ebano_mix_base_strategy = self.config["ebano_mix_default_base_strategy"]
+
+                if kwargs["ebano_mix_query_limit"] is not None:
+                    ebano_mix_query_limit = kwargs["ebano_mix_query_limit"]
+                else:
+                    ebano_mix_query_limit = self.config["ebano_mix_default_query_limit"]
+
+                if kwargs["ebano_mix_augment_limit"] is not None:
+                    ebano_mix_augment_limit = kwargs["ebano_mix_augment_limit"]
+                else:
+                    ebano_mix_augment_limit = self.config["ebano_mix_default_augment_limit"]
+
+                if kwargs["ebano_mix_min_diff"] is not None:
+                    ebano_mix_min_diff = kwargs["ebano_mix_min_diff"]
+                else:
+                    ebano_mix_min_diff = self.config["ebano_mix_default_min_diff"]
+
+                if kwargs["ebano_mix_eps"] is not None:
+                    ebano_mix_eps = kwargs["ebano_mix_eps"]
+                else:
+                    ebano_mix_eps = self.config["ebano_mix_default_eps"]
 
                 mix_iteration_methods = None
                 if qs in ["early-mix", "augment-early-mix"]:
                     mix_iteration_methods = {
-                        0: "random",  # 20000 -> 18000
+                        0: ebano_mix_base_strategy,  # 20000 -> 18000
                         1: "ebano",  # 18000 -> 16000
                         2: "ebano",  # 16000 -> 14000
                         3: "ebano",  # 14000 -> 12000
                         4: "ebano",  # 12000 -> 10000
-                        5: "random",  # 10000 -> 8000
-                        6: "random",  # 8000 -> 6000
-                        7: "random",  # 6000 -> 4000
-                        8: "random",  # 4000 -> 2000
-                        9: "random",  # 2000 -> 0 (i.e., take all)
+                        5: ebano_mix_base_strategy,  # 10000 -> 8000
+                        6: ebano_mix_base_strategy,  # 8000 -> 6000
+                        7: ebano_mix_base_strategy,  # 6000 -> 4000
+                        8: ebano_mix_base_strategy,  # 4000 -> 2000
+                        9: ebano_mix_base_strategy,  # 2000 -> 0 (i.e., take all)
                     }
                 elif qs in ["late-mix", "augment-late-mix"]:
                     mix_iteration_methods = {
-                        0: "random",  # 20000 -> 18000
-                        1: "random",  # 18000 -> 16000
-                        2: "random",  # 16000 -> 14000
-                        3: "random",  # 14000 -> 12000
-                        4: "random",  # 12000 -> 10000
+                        0: ebano_mix_base_strategy,  # 20000 -> 18000
+                        1: ebano_mix_base_strategy,  # 18000 -> 16000
+                        2: ebano_mix_base_strategy,  # 16000 -> 14000
+                        3: ebano_mix_base_strategy,  # 14000 -> 12000
+                        4: ebano_mix_base_strategy,  # 12000 -> 10000
                         5: "ebano",  # 10000 -> 8000
                         6: "ebano",  # 8000 -> 6000
                         7: "ebano",  # 6000 -> 4000
                         8: "ebano",  # 4000 -> 2000
                         9: "ebano",  # 2000 -> 0 (i.e., take all)
+                    }
+                elif qs in ["mid-mix", "augment-mid-mix"]:
+                    mix_iteration_methods = {
+                        0: ebano_mix_base_strategy,
+                        1: ebano_mix_base_strategy,
+                        2: ebano_mix_base_strategy,
+                        3: "ebano",
+                        4: "ebano",
+                        5: "ebano",
+                        6: "ebano",
+                        7: "ebano",
+                        8: "ebano",
+                        9: "ebano",
                     }
                 elif qs in ["full-mix", "augment-full-mix"]:
                     mix_iteration_methods = {
@@ -158,14 +208,21 @@ class Experiment:
                         9: "ebano",  # 2000 -> 0 (i.e., take all)
                     }
 
-                ebano_augment = None
-                if qs in ["early-mix", "late-mix", "full-mix"]:
-                    ebano_augment = False
-                elif qs in ["augment-early-mix", "augment-late-mix", "augment-full-mix"]:
-                    ebano_augment = True
+                ebano_mix_augment = None
+                if qs in ["early-mix", "late-mix", "mid-mix", "full-mix"]:
+                    ebano_mix_augment = False
+                    mix_iteration_methods[9] = "random"  # no need to apply any method; just take all elements.
+                elif qs in ["augment-early-mix", "augment-late-mix", "augment-mid-mix", "augment-full-mix"]:
+                    ebano_mix_augment = True
 
                 print("Mix iteration methods:", mix_iteration_methods)
-                print("Augment flag:", ebano_augment)
+                print("Augment flag:", ebano_mix_augment)
+                print("ebano_mix strategy", ebano_mix_strategy)
+                print("ebano_mix base_strategy", ebano_mix_base_strategy)
+                print("ebano_mix query_limit", ebano_mix_query_limit)
+                print("ebano_mix augment_limit", ebano_mix_augment_limit)
+                print("ebano_mix min_diff", ebano_mix_min_diff)
+                print("ebano_mix eps", ebano_mix_eps)
 
                 query_kwargs = {
                     "mix_iteration_methods": mix_iteration_methods,
@@ -179,8 +236,13 @@ class Experiment:
                     "min_features": self.config["min_features"],
                     "max_features": self.config["max_features"],
                     "use_gpu": self.config["ebano_use_gpu"],
-                    "eps": self.config["eps"],
-                    "augment": ebano_augment,
+                    "augment": ebano_mix_augment,
+                    "strategy": ebano_mix_strategy,
+                    "base_strategy": ebano_mix_base_strategy,
+                    "query_limit": ebano_mix_query_limit,
+                    "augment_limit": ebano_mix_augment_limit,
+                    "min_diff": ebano_mix_min_diff,
+                    "eps": ebano_mix_eps,
                     "niter": self.config["kmeans_niter"]
                 }
 

@@ -39,7 +39,7 @@ config_dict = {
 
     "lr_init": 0.01,  # VGG16: 1e-2; ResNet: 0.1; SimpleCNN w/ RMSprop 0.0001
     "momentum": 0.9,
-    "weight_decay": 1e-6,  # VGG16: 5e-4; ResNet: 1e-4; SimpleCNN w/ RMSprop 1e-6
+    "weight_decay": 1e-4,  # VGG16: 5e-4; ResNet: 1e-4; SimpleCNN w/ RMSprop 1e-6
     "n_epochs": 100,
 
     "callbacks": [
@@ -64,7 +64,12 @@ config_dict = {
     "min_features": 2,
     "max_features": 5,
     "ebano_use_gpu": False,
-    "eps": 0.1,
+    "ebano_mix_default_strategy": "rank",
+    "ebano_mix_default_base_strategy": "random",
+    "ebano_mix_default_query_limit": None,
+    "ebano_mix_default_augment_limit": None,
+    "ebano_mix_default_min_diff": 0.,
+    "ebano_mix_default_eps": 0.,
 
     ## Base model
     "base_model_name": "resnet_imagenet_25_base",

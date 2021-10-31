@@ -20,8 +20,13 @@ class MixQueryStrategy(QueryStrategy):
                  min_features=2,
                  max_features=5,
                  use_gpu=False,
-                 eps=0.3,
                  augment=False,
+                 strategy=None,
+                 base_strategy=None,
+                 query_limit=None,
+                 augment_limit=None,
+                 min_diff=None,
+                 eps=None,
                  **ebano_kwargs):
 
         current_method = mix_iteration_methods[current_iter]
@@ -35,6 +40,11 @@ class MixQueryStrategy(QueryStrategy):
         elif current_method == "entropy":
             from query.entropy import EntropyQueryStrategy
             qs = EntropyQueryStrategy()
+            qs.set_model(self.model, self.preprocess_input_fn)
+            return qs(X_pool, y_pool, n_query_instances, current_iter, seed=seed, query_batch_size=query_batch_size)
+        elif current_method == "least-confident":
+            from query.least_confident import LeastConfidentQueryStrategy
+            qs = LeastConfidentQueryStrategy()
             qs.set_model(self.model, self.preprocess_input_fn)
             return qs(X_pool, y_pool, n_query_instances, current_iter, seed=seed, query_batch_size=query_batch_size)
         elif current_method == "random":
@@ -60,8 +70,13 @@ class MixQueryStrategy(QueryStrategy):
                            min_features=min_features,
                            max_features=max_features,
                            use_gpu=use_gpu,
-                           eps=eps,
                            augment=augment,
+                           strategy=strategy,
+                           base_strategy=base_strategy,
+                           query_limit=query_limit,
+                           augment_limit=augment_limit,
+                           min_diff=min_diff,
+                           eps=eps,
                            **ebano_kwargs)
             self.augmented_set = qs.get_augmented()
             return idx_query
