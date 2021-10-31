@@ -99,7 +99,7 @@ class EBAnOQueryStrategy(QueryStrategy):
         if query_limit > n_query_instances:
             query_limit = n_query_instances
             print(f"WARNING: query_limit set to {n_query_instances}")
-        if augment_limit > n_query_instances:
+        if augment and augment_limit > n_query_instances:
             augment_limit = n_query_instances
             print(f"WARNING: augment_limit set to {n_query_instances}")
 
