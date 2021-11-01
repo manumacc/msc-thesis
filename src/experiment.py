@@ -157,11 +157,11 @@ class Experiment:
                 mix_iteration_methods = None
                 if qs in ["early-mix", "augment-early-mix"]:
                     mix_iteration_methods = {
-                        0: ebano_mix_base_strategy,  # 20000 -> 19000
+                        0: "ebano",  # 20000 -> 19000
                         1: "ebano",  # 19000 -> 18000
                         2: "ebano",  # 18000 -> 17000
                         3: "ebano",  # 17000 -> 16000
-                        4: "ebano",  # 16000 -> 15000
+                        4: ebano_mix_base_strategy,  # 16000 -> 15000
                         5: ebano_mix_base_strategy,  # 15000 -> 14000
                         6: ebano_mix_base_strategy,  # 14000 -> 13000
                         7: ebano_mix_base_strategy,  # 13000 -> 12000
@@ -175,7 +175,7 @@ class Experiment:
                         2: ebano_mix_base_strategy,
                         3: ebano_mix_base_strategy,
                         4: ebano_mix_base_strategy,
-                        5: "ebano",
+                        5: ebano_mix_base_strategy,
                         6: "ebano",
                         7: "ebano",
                         8: "ebano",
@@ -186,7 +186,7 @@ class Experiment:
                         0: ebano_mix_base_strategy,
                         1: ebano_mix_base_strategy,
                         2: ebano_mix_base_strategy,
-                        3: "ebano",
+                        3: ebano_mix_base_strategy,
                         4: "ebano",
                         5: "ebano",
                         6: "ebano",
