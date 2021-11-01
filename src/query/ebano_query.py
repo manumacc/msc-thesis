@@ -117,6 +117,10 @@ class EBAnOQueryStrategy(QueryStrategy):
                 max_preds = preds.max(axis=1)
                 idx_idx_others_sorted = np.argsort(max_preds[idx_others])
                 idx_additional = idx_others[idx_idx_others_sorted][:n_missing]
+            elif base_strategy == "entropy":
+                pool_entropy = -np.sum(preds * np.log(preds), axis=-1)
+                idx_idx_others_sorted = np.argsort(pool_entropy[idx_others])[::-1]
+                idx_additional = idx_others[idx_idx_others_sorted][:n_missing]
             else:
                 raise ValueError(f"Base strategy {base_strategy} not implemented.")
 
