@@ -124,7 +124,7 @@ class EBAnOQueryStrategy(QueryStrategy):
         else:
             idx_query = idx_query_ebano
 
-        if augment:  # Create augmented dataset
+        if augment and len(idx_candidates) > 0:  # Create augmented dataset
             print("Create augmented set")
 
             idx_augment = idx_candidates[:augment_limit]  # Limit number of candidates queried by EBAnO
