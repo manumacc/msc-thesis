@@ -37,7 +37,7 @@ config_dict = {
 
     "val_size": 0.1,  # With respect to initial training subset; does not apply to datasets with dedicated val split
 
-    "lr_init": 0.001,  # VGG16: 1e-2; ResNet: 0.1; SimpleCNN w/ RMSprop 0.0001
+    "lr_init": 0.001,  # ResNet: 0.001
     "momentum": 0.9,
     "weight_decay": 1e-4,  # VGG16: 5e-4; ResNet: 1e-4; SimpleCNN w/ RMSprop 1e-6
     "n_epochs": 100,
@@ -76,7 +76,7 @@ config_dict = {
     "base_init_size": 7500,  # With respect to whole training set; either 0-1 (percent) or >1 (number of samples)
 
     # Base model training
-    "base_lr_init": 0.1,
+    "base_lr_init": 0.1,  # VGG16: 1e-2; ResNet: 0.1; SimpleCNN w/ RMSprop 0.0001
     "base_weight_decay": 1e-4,
     "base_n_epochs": 1000,
 

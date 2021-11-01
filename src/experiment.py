@@ -157,29 +157,29 @@ class Experiment:
                 mix_iteration_methods = None
                 if qs in ["early-mix", "augment-early-mix"]:
                     mix_iteration_methods = {
-                        0: ebano_mix_base_strategy,  # 20000 -> 18000
-                        1: "ebano",  # 18000 -> 16000
-                        2: "ebano",  # 16000 -> 14000
-                        3: "ebano",  # 14000 -> 12000
-                        4: "ebano",  # 12000 -> 10000
-                        5: ebano_mix_base_strategy,  # 10000 -> 8000
-                        6: ebano_mix_base_strategy,  # 8000 -> 6000
-                        7: ebano_mix_base_strategy,  # 6000 -> 4000
-                        8: ebano_mix_base_strategy,  # 4000 -> 2000
-                        9: ebano_mix_base_strategy,  # 2000 -> 0 (i.e., take all)
+                        0: ebano_mix_base_strategy,  # 20000 -> 19000
+                        1: "ebano",  # 19000 -> 18000
+                        2: "ebano",  # 18000 -> 17000
+                        3: "ebano",  # 17000 -> 16000
+                        4: "ebano",  # 16000 -> 15000
+                        5: ebano_mix_base_strategy,  # 15000 -> 14000
+                        6: ebano_mix_base_strategy,  # 14000 -> 13000
+                        7: ebano_mix_base_strategy,  # 13000 -> 12000
+                        8: ebano_mix_base_strategy,  # 12000 -> 11000
+                        9: ebano_mix_base_strategy,  # 11000 -> 10000
                     }
                 elif qs in ["late-mix", "augment-late-mix"]:
                     mix_iteration_methods = {
-                        0: ebano_mix_base_strategy,  # 20000 -> 18000
-                        1: ebano_mix_base_strategy,  # 18000 -> 16000
-                        2: ebano_mix_base_strategy,  # 16000 -> 14000
-                        3: ebano_mix_base_strategy,  # 14000 -> 12000
-                        4: ebano_mix_base_strategy,  # 12000 -> 10000
-                        5: "ebano",  # 10000 -> 8000
-                        6: "ebano",  # 8000 -> 6000
-                        7: "ebano",  # 6000 -> 4000
-                        8: "ebano",  # 4000 -> 2000
-                        9: "ebano",  # 2000 -> 0 (i.e., take all)
+                        0: ebano_mix_base_strategy,
+                        1: ebano_mix_base_strategy,
+                        2: ebano_mix_base_strategy,
+                        3: ebano_mix_base_strategy,
+                        4: ebano_mix_base_strategy,
+                        5: "ebano",
+                        6: "ebano",
+                        7: "ebano",
+                        8: "ebano",
+                        9: "ebano",
                     }
                 elif qs in ["mid-mix", "augment-mid-mix"]:
                     mix_iteration_methods = {
@@ -196,22 +196,21 @@ class Experiment:
                     }
                 elif qs in ["full-mix", "augment-full-mix"]:
                     mix_iteration_methods = {
-                        0: "ebano",  # 20000 -> 18000
-                        1: "ebano",  # 18000 -> 16000
-                        2: "ebano",  # 16000 -> 14000
-                        3: "ebano",  # 14000 -> 12000
-                        4: "ebano",  # 12000 -> 10000
-                        5: "ebano",  # 10000 -> 8000
-                        6: "ebano",  # 8000 -> 6000
-                        7: "ebano",  # 6000 -> 4000
-                        8: "ebano",  # 4000 -> 2000
-                        9: "ebano",  # 2000 -> 0 (i.e., take all)
+                        0: "ebano",
+                        1: "ebano",
+                        2: "ebano",
+                        3: "ebano",
+                        4: "ebano",
+                        5: "ebano",
+                        6: "ebano",
+                        7: "ebano",
+                        8: "ebano",
+                        9: "ebano",
                     }
 
                 ebano_mix_augment = None
                 if qs in ["early-mix", "late-mix", "mid-mix", "full-mix"]:
                     ebano_mix_augment = False
-                    mix_iteration_methods[9] = "random"  # no need to apply any method; just take all elements.
                 elif qs in ["augment-early-mix", "augment-late-mix", "augment-mid-mix", "augment-full-mix"]:
                     ebano_mix_augment = True
 
