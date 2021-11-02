@@ -52,7 +52,7 @@ config_dict = {
     "reduce_lr_min_delta": 0.001,  # Empirically set for ResNet
 
     # Query strategy arguments
-    "n_query_instances": 1000,  # Number of instances to add at each iteration
+    "n_query_instances": 1500,  # Number of instances to add at each iteration
     "query_batch_size": 64,  # Batch size for unlabeled pool iterator. Set to a low size for EBAnO.
 
     # EBAnO query strategy arguments
