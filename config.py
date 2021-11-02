@@ -47,7 +47,7 @@ config_dict = {
     ],
 
     # decay_early_stopping
-    "reduce_lr_patience": 25,
+    "reduce_lr_patience": 20,
     "reduce_lr_decay_schedule": [0.0001, 0.00001, 0.000001],
     "reduce_lr_min_delta": 0.001,  # Empirically set for ResNet
 
