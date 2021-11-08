@@ -12,10 +12,10 @@ tensorflow = "==2.4.2"
 pillow = "!=8.3.0"
 tensorflow-addons = "*"
 faiss-gpu = "*"
+tfds-nightly = "*"
 
 [dev-packages]
 notebook = "*"
-tfds-nightly = "*"
 
 [requires]
 python_version = "3.7"
