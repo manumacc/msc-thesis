@@ -92,13 +92,13 @@ def generate_dataset(dataset_name,
 
     print("Save datasets to TFRecords")
     with Profiling("Write ds_init"):
-        save_dataset_to_tfrecord(ds_init, "ds_init", path=DATA_GENERATED_PATH, shard_size=1500, write_id=False)
+        save_dataset_to_tfrecord(ds_init, f"{dataset_name}_init", path=DATA_GENERATED_PATH, shard_size=1500, write_id=False)
     with Profiling("Write ds_pool"):
-        save_dataset_to_tfrecord(ds_pool, "ds_pool", path=DATA_GENERATED_PATH, shard_size=1500, write_id=True)
+        save_dataset_to_tfrecord(ds_pool, f"{dataset_name}_pool", path=DATA_GENERATED_PATH, shard_size=1500, write_id=True)
     with Profiling("Write ds_val"):
-        save_dataset_to_tfrecord(ds_val, "ds_val", path=DATA_GENERATED_PATH, shard_size=1500, write_id=False)
+        save_dataset_to_tfrecord(ds_val, f"{dataset_name}_val", path=DATA_GENERATED_PATH, shard_size=1500, write_id=False)
     with Profiling("Write ds_test"):
-        save_dataset_to_tfrecord(ds_test, "ds_test", path=DATA_GENERATED_PATH, shard_size=1500, write_id=False)
+        save_dataset_to_tfrecord(ds_test, f"{dataset_name}_test", path=DATA_GENERATED_PATH, shard_size=1500, write_id=False)
 
 
 arg_parser = argparse.ArgumentParser(description="generate a dataset")
