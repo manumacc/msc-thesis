@@ -18,6 +18,7 @@ DATA_GENERATED_PATH = pathlib.Path("data", "generated")
 def generate_dataset(dataset_name,
                      n_samples_init=None,
                      n_samples_test=None,
+                     shard_size=None,
                      dataset_seed=None):
     if dataset_name.startswith("imagenet"):
         # Set default configuration for splitting
@@ -25,6 +26,8 @@ def generate_dataset(dataset_name,
             n_samples_init = 300
         if n_samples_test is None:
             n_samples_test = 100
+        if shard_size is None:
+            shard_size = 1500
 
         # Set tensorflow global seed for reproducible results
         tf.random.set_seed(0)
@@ -92,20 +95,21 @@ def generate_dataset(dataset_name,
 
     print("Save datasets to TFRecords")
     with Profiling("Write ds_init"):
-        save_dataset_to_tfrecord(ds_init, f"{dataset_name}_init", path=DATA_GENERATED_PATH, shard_size=1500, write_id=False)
+        save_dataset_to_tfrecord(ds_init, f"{dataset_name}_init", path=DATA_GENERATED_PATH, shard_size=shard_size, write_id=False)
     with Profiling("Write ds_pool"):
-        save_dataset_to_tfrecord(ds_pool, f"{dataset_name}_pool", path=DATA_GENERATED_PATH, shard_size=1500, write_id=True)
+        save_dataset_to_tfrecord(ds_pool, f"{dataset_name}_pool", path=DATA_GENERATED_PATH, shard_size=shard_size, write_id=True)
     with Profiling("Write ds_val"):
-        save_dataset_to_tfrecord(ds_val, f"{dataset_name}_val", path=DATA_GENERATED_PATH, shard_size=1500, write_id=False)
+        save_dataset_to_tfrecord(ds_val, f"{dataset_name}_val", path=DATA_GENERATED_PATH, shard_size=shard_size, write_id=False)
     with Profiling("Write ds_test"):
-        save_dataset_to_tfrecord(ds_test, f"{dataset_name}_test", path=DATA_GENERATED_PATH, shard_size=1500, write_id=False)
+        save_dataset_to_tfrecord(ds_test, f"{dataset_name}_test", path=DATA_GENERATED_PATH, shard_size=shard_size, write_id=False)
 
 
 arg_parser = argparse.ArgumentParser(description="generate a dataset")
 arg_parser.add_argument("dataset_name", type=str, help="name of the dataset to generate")
+arg_parser.add_argument('--shardsize', nargs='?', default=None, type=int)
 arg_parser.add_argument('--seed', nargs='?', default=None, type=int)
 
 
 if __name__ == '__main__':
     args = arg_parser.parse_args()
-    generate_dataset(args.dataset_name, dataset_seed=args.seed)
+    generate_dataset(args.dataset_name, shard_size=args.shardsize, dataset_seed=args.seed)
