@@ -50,7 +50,7 @@ def generate_dataset(dataset_name,
             def filter_label(x, y, keep_label=tf.constant(l, dtype=tf.int64)):
                 return tf.equal(keep_label, tf.cast(y, keep_label.dtype))
 
-            ds_label = ds_train_imagenet.filter(filter_label).shuffle(1350, seed=dataset_seed+i, reshuffle_each_iteration=False)
+            ds_label = ds_train_imagenet.filter(filter_label)
             ds_init_list.append(ds_label.take(n_samples_init))
             ds_test_list.append(ds_label.skip(n_samples_init).take(n_samples_test))
             ds_pool_list.append(ds_label.skip(n_samples_init + n_samples_test).take(-1))
