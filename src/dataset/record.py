@@ -89,7 +89,7 @@ def load_dataset_from_tfrecord(filename, path=None, load_id=False, num_parallel_
         def parse_image_tf_example(tf_example):
             example = parse_tf_example(tf_example, image_feature_description)
             image_tensor = tf.io.parse_tensor(example["image"], out_type=tf.uint8)
-            return example["id"], tf.reshape(image_tensor, shape=[example["height"], example["width"], 3]), example["label"]
+            return example["id"], (tf.reshape(image_tensor, shape=[example["height"], example["width"], 3]), example["label"])
     else:
         def parse_image_tf_example(tf_example):
             example = parse_tf_example(tf_example, image_feature_description)
