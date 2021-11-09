@@ -19,6 +19,8 @@ def generate_dataset(dataset_name,
                      n_samples_init=None,
                      n_samples_test=None,
                      shard_size=None,
+                     cycle_length=8,
+                     block_length=3,
                      dataset_seed=None):
     if dataset_name.startswith("imagenet"):
         # Set default configuration for splitting
@@ -58,10 +60,16 @@ def generate_dataset(dataset_name,
             ds_test_list.append(ds_label.skip(n_samples_init).take(n_samples_test))
             ds_pool_list.append(ds_label.skip(n_samples_init + n_samples_test).take(-1))
 
-        # Interleave single-class datasets
-        ds_init = tf.data.experimental.sample_from_datasets(ds_init_list, seed=dataset_seed)
-        ds_test = tf.data.experimental.sample_from_datasets(ds_test_list, seed=dataset_seed)
-        ds_pool = tf.data.experimental.sample_from_datasets(ds_pool_list, seed=dataset_seed)
+        # Create datasets where each element is a `tf.data.Dataset` object.
+        # Then, extract all elements from datasets and interleave the results.
+        # (!) NOTE: This does not thoroughly shuffle the datasets. The first
+        # classes will still be at the beginning, and the other classes at the end.
+        ds_init = tf.data.Dataset.from_tensor_slices(ds_init_list)
+        ds_init = ds_init.interleave(lambda x: x, cycle_length=cycle_length, block_length=block_length, num_parallel_calls=tf.data.AUTOTUNE)
+        ds_pool = tf.data.Dataset.from_tensor_slices(ds_pool_list)
+        ds_pool = ds_pool.interleave(lambda x: x, cycle_length=cycle_length, block_length=block_length, num_parallel_calls=tf.data.AUTOTUNE)
+        ds_test = tf.data.Dataset.from_tensor_slices(ds_test_list)
+        ds_test = ds_test.interleave(lambda x: x, cycle_length=cycle_length, block_length=block_length, num_parallel_calls=tf.data.AUTOTUNE)
 
         # Create validation dataset by filtering all desired classes
         def filter_labels(x, y, keep_labels=tf.constant(real_labels)):
