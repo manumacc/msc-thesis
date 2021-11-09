@@ -1,3 +1,7 @@
+IMAGENETTE_LABELS = [
+    0, 217, 482, 491, 497, 566, 569, 571, 574, 701
+]
+
 IMAGENET_25_LABELS = [
     0, 19, 97, 217, 388, 389, 393, 402, 440, 482, 497, 504, 508, 545, 559, 563,
     566, 569, 571, 574, 628, 701, 759, 933, 963
@@ -9,8 +13,11 @@ IMAGENET_100_LABELS = []
 
 IMAGENET_250_LABELS = []
 
+
 def get_labels_by_name(dataset_name):
-    if dataset_name == "imagenet-25":
+    if dataset_name == "imagenet-10" or dataset_name == "imagenette":
+        labels = IMAGENETTE_LABELS
+    elif dataset_name == "imagenet-25":
         labels = IMAGENET_25_LABELS
     elif dataset_name == "imagenet-50":
         raise NotImplementedError
