@@ -42,3 +42,23 @@ def ndarray_to_pil(x):
         return Image.fromarray(x, 'RGB')
     else:
         raise ValueError(f"Unsupported image shape: {x.shape}")
+
+
+def load_image_as_pil(path, grayscale=False, target_size=None):
+    """Load an image into a PIL Image instance."""
+
+    image = Image.open(path)
+
+    if grayscale:
+        if image.mode != 'L':
+            image = image.convert('L')
+    else:
+        if image.mode != 'RGB':
+            image = image.convert('RGB')
+
+    if target_size:
+        width, height = target_size[0], target_size[1]
+        if image.size != (width, height):
+            image = image.resize((width, height), Image.NEAREST)
+
+    return image

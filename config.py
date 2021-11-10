@@ -10,13 +10,8 @@ config_dict = {
     "n_classes": 25,
 
     # Dataset name
-    "dataset": "imagenet-25",  # None, "cifar-10", "imagenet-25"
-
-    # If dataset is None, accept data from directory
-    "data_path_train": "",  # data/imagenette2/train
-    "data_path_test": "",  # data/imagenette2/val
-    "class_sample_size_train": 0,  # 800
-    "class_sample_size_test": 0,  # 300
+    "dataset_name": "imagenet-25",  # None, "cifar-10", "imagenet-25", ...
+    "dataset_path": "data/generated",
 
     ## Model
     "model": "ResNet50",  # SimpleCNN; ResNet50; VGG16

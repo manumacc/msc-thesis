@@ -247,19 +247,13 @@ class Experiment:
 
         # Initialize active learning loop
         al_loop = al.ActiveLearning(
-            path_train=self.config["data_path_train"],
-            path_test=self.config["data_path_test"],
+            dataset_name=self.config["dataset_name"],
+            dataset_path=self.config["dataset_path"],
             query_strategy=query_strategy,
             model_initialization_fn=model_initialization_fn,
             preprocess_input_fn=preprocess_fn,
             target_size=target_size,
-            class_sample_size_train=self.config["class_sample_size_train"],
-            class_sample_size_test=self.config["class_sample_size_test"],
-            init_size=self.config["base_init_size"],
-            val_size=self.config["val_size"],
-            dataset=self.config["dataset"],
             save_models=self.config["save_models"],
-            dataset_seed=self.config["dataset_seed"],
         )
 
         if train_base:

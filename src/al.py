@@ -1,202 +1,67 @@
-import os
 import pathlib
-import random
-import pickle
 
 import numpy as np
-from tensorflow.keras.datasets import cifar10
+import tensorflow as tf
 from tensorflow.keras import backend
 
-from PIL import Image
+from dataset.labels import get_labels_by_name
+from dataset.record import load_dataset_from_tfrecord
 
-from utils import pil_to_ndarray
+
+NUM_PARALLEL_READS = 4
+CYCLE_LENGTH = 4
+BLOCK_LENGTH = 16
+
+
+def debug(message):
+    print(f"[DEBUG]: {message}")
 
 
 class ActiveLearning:
     def __init__(self,
-                 path_train,
-                 path_test,
+                 dataset_name,
+                 dataset_path,
                  query_strategy,
                  model_initialization_fn,
                  preprocess_input_fn,
                  target_size,
-                 class_sample_size_train,
-                 class_sample_size_test,
-                 init_size,
-                 val_size,
-                 dataset=None,
-                 save_models=False,
-                 dataset_seed=None):
+                 save_models=False):
+        self.ds_init, self.ds_pool, self.ds_val, self.ds_test = (
+            self.initialize_dataset(dataset_name, dataset_path, num_parallel_reads=NUM_PARALLEL_READS)
+        )
+
+        self.n_classes = len(get_labels_by_name(dataset_name))
+
         self.query_strategy = query_strategy
-        self.X_augmented_set, self.y_augmented_set = None, None
+
+        self.idx_labeled_pool = []
+        self.ds_augment = None
 
         self.model = None
         self.model_weights_checkpoint = None
         self.model_initialization_fn = model_initialization_fn
+        self.save_models = save_models
 
         self.preprocess_input_fn = preprocess_input_fn
         self.target_size = target_size
 
-        self.init_size = init_size
-        self.val_size = val_size
+    def initialize_dataset(self,
+                           dataset_name,
+                           dataset_path,
+                           num_parallel_reads=None):
+        return self._load_splits_from_tfrecord(dataset_name, dataset_path, num_parallel_reads=num_parallel_reads)
 
-        if dataset:
-            self.X_train_init, self.y_train_init, self.X_val, self.y_val, self.X_pool, self.y_pool, self.X_test, self.y_test = (
-                self.initialize_dataset(dataset, seed=dataset_seed)
-            )
-        else:
-            self.X_train_init, self.y_train_init, self.X_val, self.y_val, self.X_pool, self.y_pool, self.X_test, self.y_test = (
-                self.initialize_dataset_from_directory(path_train, path_test, class_sample_size_train, class_sample_size_test, seed=dataset_seed)
-            )
+    @staticmethod
+    def _load_splits_from_tfrecord(dataset_name, dataset_path, num_parallel_reads=None):
+        ds_init = load_dataset_from_tfrecord(f"{dataset_name}_init", path=dataset_path, load_id=False, num_parallel_reads=num_parallel_reads)
+        ds_pool = load_dataset_from_tfrecord(f"{dataset_name}_pool", path=dataset_path, load_id=True, num_parallel_reads=num_parallel_reads)
+        ds_val = load_dataset_from_tfrecord(f"{dataset_name}_val", path=dataset_path, load_id=False, num_parallel_reads=num_parallel_reads)
+        ds_test = load_dataset_from_tfrecord(f"{dataset_name}_test", path=dataset_path, load_id=False, num_parallel_reads=num_parallel_reads)
 
-        self.idx_queried_last = None
-        self.idx_queried = np.array([], dtype=int)
+        return ds_init, ds_pool, ds_val, ds_test
 
-        self.save_models = save_models
-
-    def load_data_from_directory(self, path, sample_size, seed=None):
-        """
-        Load an image dataset into a numpy array X along with target classes in y
-
-        Assume images to be divided by class into different folders
-
-        path/
-            class1/
-                image1.jpg
-                image2.jpg
-                ...
-            class2/
-            ...
-            classN/
-
-        sample_size: how many elements to sample from each class
-        seed: if set, seeds the sample
-
-        X: (n samples, width, height, channels) -- non-preprocessed PIL images in np format
-        y: (n samples, )
-        [to implement] class_id (dict): {0: classname0, 1: classname1, ...}
-        """
-
-        X, y = [], []
-
-        (_, dirs, _) = next(os.walk(path))
-        classes = sorted(dirs)  # ensure order
-
-        for i, cls in enumerate(classes):
-            print(f"Loading class {i}: {cls}")
-
-            cpath = os.path.join(path, cls)
-            (_, _, filenames) = next(os.walk(cpath))
-            filenames = sorted(filenames)
-
-            if sample_size:
-                random.seed(seed)
-                filenames = random.sample(filenames, k=sample_size)
-
-            arrs = []
-
-            for f in filenames:
-                fpath = os.path.join(cpath, f)
-
-                img = self._load_img(fpath, target_size=self.target_size)
-                arr = pil_to_ndarray(img)
-                arrs.append(arr)
-
-            X_c = np.stack(arrs)
-            y_c = np.full(len(arrs), i)
-
-            X.append(X_c)
-            y.append(y_c)
-
-        X, y = np.concatenate(X), np.concatenate(y)
-        y = self._one_hot_encode(y)
-
-        return X, y, classes
-
-    def initialize_dataset(self, dataset_name, seed=None):
-        if dataset_name == "cifar-10":
-            (X, y), (X_test, y_test) = cifar10.load_data()
-            y = self._one_hot_encode(y)
-            y_test = self._one_hot_encode(y_test)
-
-            self._joint_shuffle(X, y, seed=seed)
-
-            init_bound = int(len(X) * self.init_size)
-            X_train, y_train = X[:init_bound], y[:init_bound]
-            X_pool, y_pool = X[init_bound:], y[init_bound:]
-
-            val_bound = int(len(X_train) * self.val_size)
-            X_val, y_val = X_train[:val_bound], y_train[:val_bound]
-            X_train_init, y_train_init = X_train[val_bound:], y_train[val_bound:]
-        elif dataset_name == "imagenet-25":
-            with open("data/imagenet_25/imagenet_25_train.pkl", "rb") as f:
-                (X, y) = pickle.load(f)
-            y = self._one_hot_encode(y)
-
-            with open("data/imagenet_25/imagenet_25_val.pkl", "rb") as f:
-                (X_val, y_val) = pickle.load(f)
-            y_val = self._one_hot_encode(y_val)
-
-            with open("data/imagenet_25/imagenet_25_test.pkl", "rb") as f:
-                (X_test, y_test) = pickle.load(f)
-            y_test = self._one_hot_encode(y_test)
-
-            self._joint_shuffle(X, y, seed=seed)
-
-            if self.init_size < 1:
-                init_bound = int(len(X) * self.init_size)
-            else:
-                init_bound = self.init_size
-            X_train_init, y_train_init = X[:init_bound], y[:init_bound]
-            X_pool, y_pool = X[init_bound:], y[init_bound:]
-        else:
-            raise ValueError(f"No dataset with name {dataset_name} found")
-
-        print(f"Length of initial training set: {len(X_train_init)}")
-        print(f"Length of validation set: {len(X_val)}")
-        print(f"Length of pool set: {len(X_pool)}")
-        print(f"Length of test dataset: {len(X_test)}")
-
-        return X_train_init, y_train_init, X_val, y_val, X_pool, y_pool, X_test, y_test
-
-    def initialize_dataset_from_directory(self,
-                                          path_train,
-                                          path_test,
-                                          class_sample_size_train,
-                                          class_sample_size_test,
-                                          seed=None):
-        """Initialize initial training set, validation set, unlabeled pool and
-        test set.
-        """
-
-        # Training set, validation set and unlabeled pool
-        X, y, cls_train = self.load_data_from_directory(path_train, class_sample_size_train, seed=seed)
-
-        self._joint_shuffle(X, y, seed=seed)
-
-        init_bound = int(len(X) * self.init_size)
-        X_train, y_train = X[:init_bound], y[:init_bound]
-        X_pool, y_pool = X[init_bound:], y[init_bound:]
-
-        val_bound = int(len(X_train) * self.val_size)
-        X_val, y_val = X_train[:val_bound], y_train[:val_bound]
-        X_train_init, y_train_init = X_train[val_bound:], y_train[val_bound:]
-
-        print(f"Length of initial training set: {len(X_train_init)}")
-        print(f"Length of validation set: {len(X_val)}")
-        print(f"Length of pool set: {len(X_pool)}")
-
-        # Test set
-        X_test, y_test, cls_test = self.load_data_from_directory(path_test, class_sample_size_test, seed=seed)
-
-        if cls_train != cls_test:
-            raise ValueError("Train and test classes differ")
-
-        print(f"Length of test dataset: {len(X_test)}")
-
-        return X_train_init, y_train_init, X_val, y_val, X_pool, y_pool, X_test, y_test
-
-    def initialize_base_model(self, model_name):
+    def initialize_base_model(self,
+                              model_name):
         self.model, loss_fn, optimizer, lr_init = self.model_initialization_fn()
 
         print("Optimizer configuration")
@@ -213,90 +78,156 @@ class ActiveLearning:
 
         backend.set_value(self.model.optimizer.lr, lr_init)
 
-    def get_train(self, preprocess=True, seed=None):
-        """Get current training dataset along with the validation set."""
+    def get_train(self, batch_size, shuffle_buffer_size=1000, cache_train=False, cache_labeled_pool=True):
+        if cache_train and cache_labeled_pool:
+            print("WARNING: no need to cache labeled pool when caching training set already")
 
-        print("Getting current training set")
-        if self.X_augmented_set is not None:
-            print("Concatenating X_train_init, labeled pool and augmentation data")
-            X_train = np.concatenate([self.X_train_init, self.X_pool[self.idx_queried], self.X_augmented_set])
-            y_train = np.concatenate([self.y_train_init, self.y_pool[self.idx_queried], self.y_augmented_set])
-            print(f"Augmentation data: {self.X_augmented_set.shape}, {self.y_augmented_set.shape}")
+        ds_train_list = [self.ds_init]
+
+        if len(self.idx_labeled_pool) > 0:
+            print("Labeled pool is present")
+            ds_labeled_pool = self._filter_dataset_by_index(self.ds_pool, self.idx_labeled_pool)
+
+            # DEBUG
+            print("Iterating labeled pool")
+            c = 0
+            labpoolidx = []
+            for i, v in ds_labeled_pool:
+                c += 1
+                labpoolidx.append(v[1])
+            debug(f"Total number of elements inside labeled pool: {c}")
+            debug(f"Class distribution: {np.unique(np.array(labpoolidx), return_counts=True)}")
+            # /DEBUG
+
+            if cache_labeled_pool:
+                ds_labeled_pool = ds_labeled_pool.cache()
+
+            ds_train_list.append(ds_labeled_pool)
         else:
-            print("Concatenating X_train_init and labeled pool")
-            X_train = np.concatenate([self.X_train_init, self.X_pool[self.idx_queried]])
-            y_train = np.concatenate([self.y_train_init, self.y_pool[self.idx_queried]])
-        print(f"Shape of current train: {X_train.shape} labels {y_train.shape}")
+            print("Labeled pool is not present")
 
-        print("Shuffling training dataset")
-        # This is required due to model.fit validation_split behaviour
-        self._joint_shuffle(X_train, y_train, seed=seed)
+        if self.ds_augment is not None:
+            print("Augmented set is present")
+            ds_train_list.append(self.ds_augment)
+        else:
+            print("Augmented set is not present")
 
-        if preprocess:
-            print("Preprocessing X_train")
-            X_train = self._prepare_dataset(X_train)
+        if len(ds_train_list) == 1:  # only ds_init
+            print("ONLY DS_INIT")
+            ds_train = self.ds_init
+        else:
+            print("INTERLEAVING")
+            # Interleave training datasets
+            ds_train = tf.data.Dataset.from_tensor_slices(ds_train_list)
+            ds_train = ds_train.interleave(lambda x: x, cycle_length=CYCLE_LENGTH, block_length=BLOCK_LENGTH, num_parallel_calls=tf.data.AUTOTUNE)
 
-        return X_train, y_train
+        ds_train = self._preprocess_dataset(ds_train)
+        if cache_train:
+            # note: it probably doesn't make sense to cache this since it's
+            #  mostly initial training set and may be read directly from files
+            #  produced by `generate_dataset.py`
+            ds_train = ds_train.cache()
+        ds_train = (
+            ds_train
+            .shuffle(shuffle_buffer_size)
+            .batch(batch_size)
+            .prefetch(tf.data.AUTOTUNE)
+        )
 
-    def get_val(self, preprocess=True):
-        X_val = np.copy(self.X_val)
-        y_val = np.copy(self.y_val)
+        return ds_train
 
-        if preprocess:
-            print("Preprocessing val dataset")
-            X_val = self._prepare_dataset(X_val)
+    def get_unlabeled_pool(self):
+        ds_pool = self.ds_pool
+        ds_pool = self._filter_dataset_by_index(ds_pool, self.idx_labeled_pool, keep_indices=False)
+        ds_pool = self._preprocess_dataset(ds_pool, only_one_hot=True)
 
-        return X_val, y_val
+        metadata = {
+            "n_classes": self.n_classes,
+        }
 
-    def get_pool(self, preprocess=True):
-        """Get current unlabeled pool"""
+        # we don't preprocess the unlabeled pool at this time as there may be
+        # query strategies that require raw data to operate.
+        # ds_pool examples are structured as (index, (image, label))
+        return ds_pool, metadata
 
-        print("Getting current pool")
-        X_pool = np.delete(self.X_pool, self.idx_queried, axis=0)
-        y_pool = np.delete(self.y_pool, self.idx_queried, axis=0)
-        idx_pool = np.delete(np.arange(0, len(self.X_pool)), self.idx_queried)
-        print(f"Size of current pool: {X_pool.shape} target {y_pool.shape}")
+    @staticmethod
+    def _filter_dataset_by_index(dataset, index, keep_indices=True):
+        # Declare a tf hashtable
+        key_tensor = tf.constant(index)
+        val_tensor = tf.ones_like(key_tensor)
 
-        if preprocess:
-            print("Preprocessing X_pool")
-            X_pool = self._prepare_dataset(X_pool)
+        table = tf.lookup.StaticHashTable(
+            tf.lookup.KeyValueTensorInitializer(key_tensor, val_tensor),
+            default_value=0)
 
-        return X_pool, y_pool, idx_pool
+        if keep_indices:  # keep specified indices
+            def hash_table_filter(i, v):
+                table_value = table.lookup(tf.cast(i, tf.int32))  # 1 if index in arr, else 0
+                keep_record = tf.cast(table_value, tf.bool)
+                return keep_record
+        else:  # filter out specified indices
+            def hash_table_filter(i, v):
+                table_value = table.lookup(tf.cast(i, tf.int32))
+                keep_record = tf.cast(table_value, tf.bool)
+                return tf.math.logical_not(keep_record)
 
-    def get_test(self, preprocess=True):
-        X_test = np.copy(self.X_test)
-        y_test = np.copy(self.y_test)
+        dataset_filtered = dataset.filter(hash_table_filter)
 
-        if preprocess:
-            print("Preprocessing test dataset")
-            X_test = self._prepare_dataset(X_test)
+        return dataset_filtered
 
-        return X_test, y_test
+    def get_val(self, batch_size):
+        ds_val = self.ds_val
+        ds_val = self._preprocess_dataset(ds_val)
+        ds_val = (
+            ds_val
+            .batch(batch_size)
+            .cache()  # in-memory cache (we can afford a low memory cost)
+            .prefetch(tf.data.AUTOTUNE)
+        )
+        # no need to shuffle val.
+        return ds_val
 
-    def _prepare_dataset(self, X, preprocess=True):
-        if preprocess:
-            X = self.preprocess_input_fn(X)  # This overwrites X
+    def get_test(self, batch_size):
+        ds_test = self.ds_test
+        ds_test = self._preprocess_dataset(ds_test)
+        ds_test = (
+            ds_test
+            .batch(batch_size)
+            .prefetch(tf.data.AUTOTUNE)
+        )
+        # no need to cache test as it is read rarely.
+        # no need to shuffle it either.
+        return ds_test
 
-        return X
+    def _preprocess_dataset(self, dataset, only_one_hot=False):
+        if only_one_hot:
+            def tf_map_preprocess(x, y):
+                return x, tf.one_hot(y, depth=self.n_classes)
+        else:
+            def tf_map_preprocess(x, y):
+                return self.preprocess_input_fn(x), tf.one_hot(y, depth=self.n_classes)
 
-    def add_to_train(self, idx):
-        """Move a batch of labeled data from the unlabeled pool to the training
-        dataset
-        """
+        ds_preprocess = (
+            dataset
+            .map(tf_map_preprocess, num_parallel_calls=tf.data.AUTOTUNE)
+        )
 
-        self.idx_queried = np.concatenate([self.idx_queried, idx])
-        self.idx_queried_last = idx
-        print(f"Total amount of queried samples post-query: {len(self.idx_queried)}")
+        return ds_preprocess
 
-    def query(self, X_pool, y_pool, n_query_instances, current_iter, seed=None, **query_kwargs):
-        """Call to query strategy function"""
-
+    def query(self, ds_pool, metadata, n_query_instances, current_iter, seed=None, **query_kwargs):
         self.query_strategy.set_model(self.model, self.preprocess_input_fn)
-        idx_query = self.query_strategy(X_pool, y_pool, n_query_instances, current_iter, seed=seed, **query_kwargs)
-        augmented_set = self.query_strategy.get_augmented()
-        if augmented_set is not None:
-            self.X_augmented_set, self.y_augmented_set = augmented_set
-        return idx_query
+
+        indices = self.query_strategy(ds_pool, metadata, n_query_instances, current_iter, seed=seed, **query_kwargs)
+        print(f"Queried {len(indices)} samples from unlabeled pool")
+        debug("Queried indices:")
+        debug(indices)
+
+        self.idx_labeled_pool.append(indices)
+        print(f"Total number of queried samples post-query: {len(self.idx_labeled_pool)}")
+
+        augment_set = self.query_strategy.get_augmented()
+        if augment_set is not None:
+            self.ds_augment = augment_set
 
     def learn(self,
               n_loops,
@@ -308,35 +239,20 @@ class ActiveLearning:
               dir_logs=None,
               seed=None,
               **query_kwargs):
-        """Runs active learning loops.
-
-        Args:
-            n_loops: Number of active learning loops
-            n_query_instances: Number of instances to query at each iteration
-            batch_size: Batch size for model fit and evaluation
-            n_epochs: Number of epochs for model fit
-            callbacks:
-            base_model_name:
-            dir_logs:
-            seed: Reproducibility for query strategy
-            **query_kwargs: Query strategy kwargs
+        """
         """
 
         logs = {"train": [], "test": []}
         pathlib.Path("logs", dir_logs).mkdir(parents=True, exist_ok=False)
 
-        print("Total dataset size:", len(self.X_train_init) + len(self.X_pool))
-
-        X_test, y_test = self.get_test()
-        X_val, y_val = self.get_val()
-        print("Composition of validation set:")
-        print(np.unique(self._one_hot_decode(y_val), return_counts=True))
-
         print("Initializing base model")
         self.initialize_base_model(base_model_name)
 
+        ds_val = self.get_val(batch_size)
+        ds_test = self.get_test(batch_size)
+
         print("Evaluating base model")
-        test_metrics = self.model.evaluate(X_test, y_test, batch_size=batch_size)
+        test_metrics = self.model.evaluate(ds_test)
         logs["base_test"] = test_metrics
 
         # Active learning loop
@@ -344,7 +260,7 @@ class ActiveLearning:
             print(f"* Iteration #{i+1}")
 
             # Reset augmented set
-            self.X_augmented_set, self.y_augmented_set = None, None
+            self.ds_augment = None
 
             if i > 0:
                 self.model, loss_fn, optimizer, lr_init = self.model_initialization_fn()
@@ -360,32 +276,25 @@ class ActiveLearning:
                 self.model.set_weights(self.model_weights_checkpoint)
                 backend.set_value(self.model.optimizer.lr, lr_init)
 
-            X_pool, y_pool, idx_pool = self.get_pool(preprocess=False)
-            print("Querying")
-            idx_query = self.query(X_pool, y_pool, n_query_instances, current_iter=i, seed=seed, **query_kwargs)
-            print(f"Queried {len(idx_query)} samples.")
-            self.add_to_train(idx_pool[idx_query])
-            del X_pool, idx_query
+            ds_pool, metadata = self.get_unlabeled_pool()
 
-            X_train, y_train = self.get_train(preprocess=True, seed=seed)
-            print("Composition of current training set:")
-            print(np.unique(self._one_hot_decode(y_train), return_counts=True))
+            print("Querying unlabeled pool")
+            self.query(ds_pool, metadata, n_query_instances, current_iter=i, seed=seed, **query_kwargs)
+
+            ds_train = self.get_train(batch_size)
             print("Fitting model")
-            history = self.model.fit(X_train, y_train,
-                                     validation_data=(X_val, y_val),
-                                     batch_size=batch_size,
+            history = self.model.fit(ds_train,
+                                     validation_data=ds_val,
                                      epochs=n_epochs,
-                                     shuffle=True,
                                      callbacks=callbacks)
             logs["train"].append(history.history)
-            del X_train, y_train
 
             if self.save_models:
-                print("Saving model")
+                print(f"Saving model at iteration {i+1}")
                 self.model.save(pathlib.Path("logs", dir_logs, f"model_iter_{i+1}"))
 
             print("Evaluating model")
-            test_metrics = self.model.evaluate(X_test, y_test, batch_size=batch_size)
+            test_metrics = self.model.evaluate(ds_test)
             logs["test"].append(test_metrics)
 
             self.model_weights_checkpoint = self.model.get_weights()
@@ -398,8 +307,6 @@ class ActiveLearning:
                    n_epochs,
                    callbacks,
                    seed=None):
-        """Train and save base model"""
-
         logs = {"train": [], "test": None}
 
         model, loss_fn, optimizer, _ = self.model_initialization_fn(base=True)
@@ -412,26 +319,19 @@ class ActiveLearning:
                       loss=loss_fn,
                       metrics=["accuracy"])
 
-        X_train, y_train = self.get_train(preprocess=True, seed=seed)
-        X_val, y_val = self.get_val()
-        print("Composition of initial training set:")
-        print(np.unique(self._one_hot_decode(y_train), return_counts=True))
+        ds_train = self.get_train(batch_size)
+        ds_val = self.get_val(batch_size)
 
         print("Fitting base model")
-        history = model.fit(X_train, y_train,
-                            validation_data=(X_val, y_val),
-                            batch_size=batch_size,
+        history = model.fit(ds_train,
+                            validation_data=ds_val,
                             epochs=n_epochs,
-                            shuffle=True,
                             callbacks=callbacks)
         logs["train"].append(history.history)
-        del X_train, y_train
 
-        X_test, y_test = self.get_test()
         print("Evaluating model")
-        test_metrics = model.evaluate(X_test, y_test, batch_size=batch_size)
-        del X_test, y_test
-
+        ds_test = self.get_test(batch_size)
+        test_metrics = model.evaluate(ds_test)
         logs["test"] = test_metrics
 
         print("Saving base model weights")
@@ -440,52 +340,3 @@ class ActiveLearning:
         model.save_weights(pathlib.Path(path_model, model_name))
 
         return logs
-
-    @staticmethod
-    def _joint_shuffle(a, b, seed=0):
-        """Jointly shuffles two ndarrays in-place."""
-        rng = np.random.default_rng(seed)
-        rng.shuffle(a)
-        rng = np.random.default_rng(seed)
-        rng.shuffle(b)
-
-    @staticmethod
-    def _load_img(path, grayscale=False, target_size=None):
-        """Load an image into a PIL Image instance."""
-
-        image = Image.open(path)
-
-        if grayscale:
-            if image.mode != 'L':
-                image = image.convert('L')
-        else:
-            if image.mode != 'RGB':
-                image = image.convert('RGB')
-
-        if target_size:
-            width, height = target_size[0], target_size[1]
-            if image.size != (width, height):
-                image = image.resize((width, height), Image.NEAREST)
-
-        return image
-
-    @staticmethod
-    def _one_hot_encode(y):
-        y = y.squeeze()
-
-        if y.ndim != 1:
-            raise ValueError(f"Unsupported shape: {y.shape}")
-
-        y_one_hot = np.zeros((y.size, y.max() + 1))
-        y_one_hot[np.arange(y.size), y] = 1
-
-        return y_one_hot
-
-    @staticmethod
-    def _one_hot_decode(y_one_hot):
-        if y_one_hot.ndim != 2:
-            raise ValueError(f"Unsupported shape: {y_one_hot.shape}")
-
-        y = np.argmax(y_one_hot, axis=1)
-
-        return y
