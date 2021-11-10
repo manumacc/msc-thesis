@@ -16,6 +16,7 @@ tfds-nightly = "*"
 
 [dev-packages]
 notebook = "*"
+psutil = "*"
 
 [requires]
 python_version = "3.7"
