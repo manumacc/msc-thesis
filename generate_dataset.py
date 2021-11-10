@@ -144,7 +144,7 @@ def generate_dataset(dataset_name,
             part_filename_format = f"{dataset_name}-{subset}.tfrecord"
             print(part_filename_format)
             for i in range(n_shards[subset]):
-                part_filename = f"{part_filename_format}-{i:05d}-of-{n_shards[subset]:05d}"
+                part_filename = f"{part_filename_format}-{i+1:05d}-of-{n_shards[subset]:05d}"
                 writers[subset].append(
                     tf.io.TFRecordWriter(str(pathlib.Path(path, part_filename)))
                 )
