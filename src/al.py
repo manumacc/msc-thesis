@@ -78,7 +78,12 @@ class ActiveLearning:
 
         backend.set_value(self.model.optimizer.lr, lr_init)
 
-    def get_train(self, batch_size, shuffle_buffer_size=1000, cache_train=False, cache_labeled_pool=True):
+    def get_train(self,
+                  batch_size,
+                  shuffle_buffer_size=1000,
+                  cache_train=False,
+                  cache_labeled_pool=True,
+                  data_augmentation=True):
         if cache_train and cache_labeled_pool:
             print("WARNING: no need to cache labeled pool when caching training set already")
 
@@ -87,18 +92,18 @@ class ActiveLearning:
         if len(self.idx_labeled_pool) > 0:
             print("Labeled pool is present")
             ds_labeled_pool = self._filter_dataset_by_index(self.ds_pool, self.idx_labeled_pool)
-            ds_labeled_pool = self._preprocess_labeled_pool(ds_labeled_pool)
+            ds_labeled_pool = self._remove_index_from_pool(ds_labeled_pool)
 
-            # DEBUG
-            print("Iterating labeled pool")
-            c = 0
-            labpoolidx = []
-            for i, v in ds_labeled_pool:
-                c += 1
-                labpoolidx.append(v[1])
-            debug(f"Total number of elements inside labeled pool: {c}")
-            debug(f"Class distribution: {np.unique(np.array(labpoolidx), return_counts=True)}")
-            # /DEBUG
+            # # DEBUG
+            # print("Iterating labeled pool")
+            # c = 0
+            # labpoolidx = []
+            # for x, y in ds_labeled_pool:
+            #     c += 1
+            #     labpoolidx.append(y)
+            # debug(f"Total number of elements inside labeled pool: {c}")
+            # debug(f"Class distribution: {np.unique(np.array(labpoolidx), return_counts=True)}")
+            # # /DEBUG
 
             if cache_labeled_pool:
                 ds_labeled_pool = ds_labeled_pool.cache()
@@ -114,7 +119,7 @@ class ActiveLearning:
             print("Augmented set is not present")
 
         if len(ds_train_list) == 1:  # only ds_init
-            print("ONLY DS_INIT")
+            print("Only ds_init")
             ds_train = self.ds_init
         else:
             print("Interleaving datasets")
@@ -122,11 +127,15 @@ class ActiveLearning:
             ds_train = tf.data.Dataset.from_tensor_slices(ds_train_list)
             ds_train = ds_train.interleave(lambda x: x, cycle_length=CYCLE_LENGTH, block_length=BLOCK_LENGTH, num_parallel_calls=tf.data.AUTOTUNE)
 
+        if data_augmentation:
+            ds_train = self._apply_data_augmentation(ds_train)
+
         ds_train = self._preprocess_dataset(ds_train)
+
         if cache_train:
             # note: it probably doesn't make sense to cache this since it's
             #  mostly initial training set and may be read directly from files
-            #  produced by `generate_dataset.py`
+            #  produced by `generate_dataset.py`. Instead, cache the labeled pool.
             ds_train = ds_train.cache()
         ds_train = (
             ds_train
@@ -139,11 +148,8 @@ class ActiveLearning:
 
     def get_unlabeled_pool(self):
         ds_pool = self.ds_pool
-
         if len(self.idx_labeled_pool) > 0:
             ds_pool = self._filter_dataset_by_index(ds_pool, self.idx_labeled_pool, keep_indices=False)
-
-        # ds_pool = self._preprocess_dataset(ds_pool, only_one_hot=True)
 
         metadata = {
             "n_classes": self.n_classes,
@@ -185,7 +191,7 @@ class ActiveLearning:
         ds_val = (
             ds_val
             .batch(batch_size)
-            .cache()  # in-memory cache (we can afford a low memory cost)
+            .cache()  # in-memory cache (we can afford a low memory cost amortized by fetching val at each epoch)
             .prefetch(tf.data.AUTOTUNE)
         )
         # no need to shuffle val.
@@ -218,7 +224,20 @@ class ActiveLearning:
 
         return ds_preprocess
 
-    def _preprocess_labeled_pool(self, ds_labeled_pool):
+    @staticmethod
+    def _apply_data_augmentation(dataset):
+        def tf_map_horizontal_flip(x, y):
+            return tf.image.random_flip_left_right(x), y
+
+        ds_augmented = (
+            dataset
+            .map(tf_map_horizontal_flip, num_parallel_calls=tf.data.AUTOTUNE)
+        )
+
+        return ds_augmented
+
+    @staticmethod
+    def _remove_index_from_pool(ds_labeled_pool):
         def tf_map_remove_index(i, v):
             return v[0], v[1]
 
@@ -227,16 +246,13 @@ class ActiveLearning:
             .map(tf_map_remove_index, num_parallel_calls=tf.data.AUTOTUNE)
         )
 
-        ds_preprocess = self._preprocess_dataset(ds_noindex)
-        return ds_preprocess
+        return ds_noindex
 
     def query(self, ds_pool, metadata, n_query_instances, current_iter, seed=None, **query_kwargs):
         self.query_strategy.set_model(self.model, self.preprocess_input_fn)
 
         indices = self.query_strategy(ds_pool, metadata, n_query_instances, current_iter, seed=seed, **query_kwargs)
         print(f"Queried {len(indices)} samples from unlabeled pool")
-        debug("Queried indices:")
-        debug(indices)
 
         self.idx_labeled_pool.extend(indices)
         print(f"Total number of queried samples post-query: {len(self.idx_labeled_pool)}")
@@ -258,7 +274,7 @@ class ActiveLearning:
         """
         """
 
-        logs = {"train": [], "test": []}
+        logs = {"train": [], "test": [], "test_preds": []}
         pathlib.Path("logs", dir_logs).mkdir(parents=True, exist_ok=False)
 
         print("Initializing base model")
@@ -313,6 +329,10 @@ class ActiveLearning:
             test_metrics = self.model.evaluate(ds_test)
             logs["test"].append(test_metrics)
 
+            print("Fetching predictions")
+            preds = self.model.predict(ds_test)
+            logs["test_preds"].append(preds)
+
             self.model_weights_checkpoint = self.model.get_weights()
 
         return logs
@@ -323,7 +343,7 @@ class ActiveLearning:
                    n_epochs,
                    callbacks,
                    seed=None):
-        logs = {"train": [], "test": None}
+        logs = {"train": [], "test": None, "test_preds": None}
 
         model, loss_fn, optimizer, _ = self.model_initialization_fn(base=True)
 
@@ -349,6 +369,10 @@ class ActiveLearning:
         ds_test = self.get_test(batch_size)
         test_metrics = model.evaluate(ds_test)
         logs["test"] = test_metrics
+
+        print("Fetching predictions")
+        preds = model.predict(ds_test)
+        logs["test_preds"] = preds
 
         print("Saving base model weights")
         path_model = pathlib.Path("models", model_name)
