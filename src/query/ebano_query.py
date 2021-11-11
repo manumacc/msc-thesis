@@ -8,8 +8,8 @@ from utils import Profiling, ndarray_to_pil, pil_to_ndarray
 
 class EBAnOQueryStrategy(QueryStrategy):
     def __call__(self,
-                 X_pool,
-                 y_pool,
+                 ds_pool,
+                 metadata,
                  n_query_instances,
                  current_iter,
                  seed=None,
@@ -32,7 +32,7 @@ class EBAnOQueryStrategy(QueryStrategy):
                  eps=None,
                  **ebano_kwargs):
 
-        self.augmented_set = None  # reset augmented set
+        self.ds_augment = None  # reset augmented set
 
         # Predict
         X_pool_preprocessed = self.preprocess_input_fn(np.copy(X_pool))
@@ -148,7 +148,7 @@ class EBAnOQueryStrategy(QueryStrategy):
             X_augmented_set = np.array(X_augmented_set)
             y_augmented_set = np.array(y_augmented_set)
 
-            self.augmented_set = (X_augmented_set, y_augmented_set)
+            self.ds_augment = (X_augmented_set, y_augmented_set)
 
         return idx_query
 

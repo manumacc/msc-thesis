@@ -7,9 +7,6 @@ config_dict = {
     "experiment_seed": 42,
 
     ## Dataset
-    "n_classes": 25,
-
-    # Dataset name
     "dataset_name": "imagenet-25",  # None, "cifar-10", "imagenet-25", ...
     "dataset_path": "data/generated",
 
@@ -30,8 +27,6 @@ config_dict = {
     ## Active learning
     "n_loops": 10,
 
-    "val_size": 0.1,  # With respect to initial training subset; does not apply to datasets with dedicated val split
-
     "lr_init": 0.001,  # ResNet: 0.001
     "momentum": 0.9,
     "weight_decay": 1e-4,  # VGG16: 5e-4; ResNet: 1e-4; SimpleCNN w/ RMSprop 1e-6
@@ -45,6 +40,7 @@ config_dict = {
     "reduce_lr_patience": 20,
     "reduce_lr_decay_schedule": [0.0001, 0.00001, 0.000001],
     "reduce_lr_min_delta": 0.001,  # Empirically set for ResNet
+    "reduce_lr_min": 0.000001,
 
     # Query strategy arguments
     "n_query_instances": 1500,  # Number of instances to add at each iteration
@@ -68,7 +64,6 @@ config_dict = {
 
     ## Base model
     "base_model_name": "resnet_imagenet_25_base",
-    "base_init_size": 7500,  # With respect to whole training set; either 0-1 (percent) or >1 (number of samples)
 
     # Base model training
     "base_lr_init": 0.1,  # VGG16: 1e-2; ResNet: 0.1; SimpleCNN w/ RMSprop 0.0001
@@ -82,4 +77,5 @@ config_dict = {
     "base_reduce_lr_patience": 50,
     "base_reduce_lr_decay_schedule": [0.01, 0.001],
     "base_reduce_lr_min_delta": 0.01,  # Empirically set for ResNet
+    "base_reduce_lr_min": 0.001,
 }

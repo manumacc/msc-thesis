@@ -4,8 +4,8 @@ from qs import QueryStrategy
 
 class MixQueryStrategy(QueryStrategy):
     def __call__(self,
-                 X_pool,
-                 y_pool,
+                 ds_pool,
+                 metadata,
                  n_query_instances,
                  current_iter,
                  seed=None,
@@ -30,7 +30,7 @@ class MixQueryStrategy(QueryStrategy):
                  **ebano_kwargs):
 
         current_method = mix_iteration_methods[current_iter]
-        self.augmented_set = None
+        self.ds_augment = None
 
         if current_method == "margin-sampling":
             from query.margin_sampling import MarginSamplingQueryStrategy
@@ -78,7 +78,7 @@ class MixQueryStrategy(QueryStrategy):
                            min_diff=min_diff,
                            eps=eps,
                            **ebano_kwargs)
-            self.augmented_set = qs.get_augmented()
+            self.ds_augment = qs.get_ds_augment()
             return idx_query
         else:
             raise ValueError(f"Unknown query method {current_method}")

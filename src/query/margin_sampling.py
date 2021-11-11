@@ -19,24 +19,8 @@ class MarginSamplingQueryStrategy(QueryStrategy):
         more ambiguous sample.
         """
 
-        # todo: remove this and add metadata["indices"] array that contains all
-        #  current indices inside the training pool (we can derive this by
-        #  using self.idx_labeled_pool and the length of the whole pool (lab+unl)
-        idx_pool = []
-        print("Iterating pool")
-        for idx, _ in ds_pool:
-            idx_pool.append(idx)
-        idx_pool = np.array(idx_pool)
-
-        def tf_map_preprocess(i, v):
-            return self.preprocess_input_fn(v[0]), tf.one_hot(v[1], depth=metadata["n_classes"])
-
-        ds_pool_preprocess = (
-            ds_pool
-            .map(tf_map_preprocess, num_parallel_calls=tf.data.AUTOTUNE, deterministic=True)  # we lose the index here
-            .batch(query_batch_size)
-            .prefetch(tf.data.AUTOTUNE)
-        )
+        idx_pool = self._get_pool_indices(ds_pool)
+        ds_pool_preprocess = self._preprocess_dataset(ds_pool, metadata, query_batch_size)
 
         preds = self.model.predict(ds_pool_preprocess,
                                    verbose=1)  # (len(X_pool), n_classes)

@@ -53,10 +53,10 @@ class ActiveLearning:
 
     @staticmethod
     def _load_splits_from_tfrecord(dataset_name, dataset_path, num_parallel_reads=None):
-        ds_init = load_dataset_from_tfrecord(f"{dataset_name}_init", path=dataset_path, load_id=False, num_parallel_reads=num_parallel_reads)
-        ds_pool = load_dataset_from_tfrecord(f"{dataset_name}_pool", path=dataset_path, load_id=True, num_parallel_reads=num_parallel_reads)
-        ds_val = load_dataset_from_tfrecord(f"{dataset_name}_val", path=dataset_path, load_id=False, num_parallel_reads=num_parallel_reads)
-        ds_test = load_dataset_from_tfrecord(f"{dataset_name}_test", path=dataset_path, load_id=False, num_parallel_reads=num_parallel_reads)
+        ds_init = load_dataset_from_tfrecord(f"{dataset_name}-init", path=dataset_path, load_id=False, num_parallel_reads=num_parallel_reads)
+        ds_pool = load_dataset_from_tfrecord(f"{dataset_name}-pool", path=dataset_path, load_id=True, num_parallel_reads=num_parallel_reads)
+        ds_val = load_dataset_from_tfrecord(f"{dataset_name}-val", path=dataset_path, load_id=False, num_parallel_reads=num_parallel_reads)
+        ds_test = load_dataset_from_tfrecord(f"{dataset_name}-test", path=dataset_path, load_id=False, num_parallel_reads=num_parallel_reads)
 
         return ds_init, ds_pool, ds_val, ds_test
 
@@ -87,6 +87,7 @@ class ActiveLearning:
         if len(self.idx_labeled_pool) > 0:
             print("Labeled pool is present")
             ds_labeled_pool = self._filter_dataset_by_index(self.ds_pool, self.idx_labeled_pool)
+            ds_labeled_pool = self._preprocess_labeled_pool(ds_labeled_pool)
 
             # DEBUG
             print("Iterating labeled pool")
@@ -116,7 +117,7 @@ class ActiveLearning:
             print("ONLY DS_INIT")
             ds_train = self.ds_init
         else:
-            print("INTERLEAVING")
+            print("Interleaving datasets")
             # Interleave training datasets
             ds_train = tf.data.Dataset.from_tensor_slices(ds_train_list)
             ds_train = ds_train.interleave(lambda x: x, cycle_length=CYCLE_LENGTH, block_length=BLOCK_LENGTH, num_parallel_calls=tf.data.AUTOTUNE)
@@ -138,8 +139,11 @@ class ActiveLearning:
 
     def get_unlabeled_pool(self):
         ds_pool = self.ds_pool
-        ds_pool = self._filter_dataset_by_index(ds_pool, self.idx_labeled_pool, keep_indices=False)
-        ds_pool = self._preprocess_dataset(ds_pool, only_one_hot=True)
+
+        if len(self.idx_labeled_pool) > 0:
+            ds_pool = self._filter_dataset_by_index(ds_pool, self.idx_labeled_pool, keep_indices=False)
+
+        # ds_pool = self._preprocess_dataset(ds_pool, only_one_hot=True)
 
         metadata = {
             "n_classes": self.n_classes,
@@ -214,6 +218,18 @@ class ActiveLearning:
 
         return ds_preprocess
 
+    def _preprocess_labeled_pool(self, ds_labeled_pool):
+        def tf_map_remove_index(i, v):
+            return v[0], v[1]
+
+        ds_noindex = (
+            ds_labeled_pool
+            .map(tf_map_remove_index, num_parallel_calls=tf.data.AUTOTUNE)
+        )
+
+        ds_preprocess = self._preprocess_dataset(ds_noindex)
+        return ds_preprocess
+
     def query(self, ds_pool, metadata, n_query_instances, current_iter, seed=None, **query_kwargs):
         self.query_strategy.set_model(self.model, self.preprocess_input_fn)
 
@@ -222,12 +238,12 @@ class ActiveLearning:
         debug("Queried indices:")
         debug(indices)
 
-        self.idx_labeled_pool.append(indices)
+        self.idx_labeled_pool.extend(indices)
         print(f"Total number of queried samples post-query: {len(self.idx_labeled_pool)}")
 
-        augment_set = self.query_strategy.get_augmented()
-        if augment_set is not None:
-            self.ds_augment = augment_set
+        ds_augment = self.query_strategy.get_ds_augment()
+        if ds_augment is not None:
+            self.ds_augment = ds_augment
 
     def learn(self,
               n_loops,
