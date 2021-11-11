@@ -50,13 +50,11 @@ def get_shards(dataset_name):
     if dataset_name == "imagenet-10" or dataset_name == "imagenette":
         n_shards_init, n_shards_val, n_shards_pool, n_shards_test = 15, 5, 50, 10
     elif dataset_name == "imagenet-25":
-        raise NotImplementedError
-    elif dataset_name == "imagenet-50":
-        raise NotImplementedError
+        n_shards_init, n_shards_val, n_shards_pool, n_shards_test = 40, 10, 100, 20
     elif dataset_name == "imagenet-100":
-        raise NotImplementedError
+        n_shards_init, n_shards_val, n_shards_pool, n_shards_test = 100, 30, 400, 50
     elif dataset_name == "imagenet-250":
-        raise NotImplementedError
+        n_shards_init, n_shards_val, n_shards_pool, n_shards_test = 300, 100, 800, 100
     else:
         raise ValueError(f"Dataset {dataset_name} is not available.")
 
