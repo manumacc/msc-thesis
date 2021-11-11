@@ -8,7 +8,7 @@ config_dict = {
 
     ## Dataset
     "dataset_name": "imagenet-25",  # None, "cifar-10", "imagenet-25", ...
-    "dataset_path": "data/generated",
+    "dataset_path": "data",
 
     ## Model
     "model": "ResNet50",  # SimpleCNN; ResNet50; VGG16
@@ -33,14 +33,14 @@ config_dict = {
     "n_epochs": 100,
 
     "callbacks": [
-        "reduce_lr_restore_on_plateau",
+        "reduce_lr_on_plateau",
     ],
 
     # decay_early_stopping
     "reduce_lr_patience": 20,
-    "reduce_lr_decay_schedule": [0.0001, 0.00001, 0.000001],
+    # "reduce_lr_decay_schedule": [0.0001, 0.00001],
     "reduce_lr_min_delta": 0.001,  # Empirically set for ResNet
-    "reduce_lr_min": 0.000001,
+    "reduce_lr_min": 0.00001,
 
     # Query strategy arguments
     "n_query_instances": 1500,  # Number of instances to add at each iteration
@@ -62,20 +62,20 @@ config_dict = {
     "ebano_mix_default_min_diff": 0.,
     "ebano_mix_default_eps": 0.,
 
-    ## Base model
-    "base_model_name": "resnet_imagenet_25_base",
+    # Base model for AL loop
+    "base_model_name": None,
 
-    # Base model training
+    ## Base model training
     "base_lr_init": 0.1,  # VGG16: 1e-2; ResNet: 0.1; SimpleCNN w/ RMSprop 0.0001
     "base_weight_decay": 1e-4,
-    "base_n_epochs": 1000,
+    "base_n_epochs": 500,
 
     "base_callbacks": [
-        "reduce_lr_restore_on_plateau",
+        "reduce_lr_on_plateau",
     ],
 
     "base_reduce_lr_patience": 50,
-    "base_reduce_lr_decay_schedule": [0.01, 0.001],
+    # "base_reduce_lr_decay_schedule": [0.01, 0.001],
     "base_reduce_lr_min_delta": 0.01,  # Empirically set for ResNet
     "base_reduce_lr_min": 0.001,
 }
