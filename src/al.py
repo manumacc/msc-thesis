@@ -54,7 +54,7 @@ class ActiveLearning:
     @staticmethod
     def _load_splits_from_tfrecord(dataset_name, dataset_path, num_parallel_reads=None):
         ds_init = load_dataset_from_tfrecord(f"{dataset_name}-init", path=dataset_path, load_id=False, num_parallel_reads=num_parallel_reads)
-        ds_pool = load_dataset_from_tfrecord(f"{dataset_name}-pool", path=dataset_path, load_id=True, num_parallel_reads=num_parallel_reads)
+        ds_pool = load_dataset_from_tfrecord(f"{dataset_name}-pool", path=dataset_path, load_id=True, num_parallel_reads=num_parallel_reads, deterministic=True)
         ds_val = load_dataset_from_tfrecord(f"{dataset_name}-val", path=dataset_path, load_id=False, num_parallel_reads=num_parallel_reads)
         ds_test = load_dataset_from_tfrecord(f"{dataset_name}-test", path=dataset_path, load_id=False, num_parallel_reads=num_parallel_reads)
 
