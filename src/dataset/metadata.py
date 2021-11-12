@@ -1,3 +1,8 @@
+IMAGENET_INIT_SIZE = 300
+IMAGENET_TEST_SIZE = 100
+IMAGENET_TRAIN_TOTAL = 1300
+
+
 IMAGENETTE_LABELS = [
     0, 217, 482, 491, 497, 566, 569, 571, 574, 701
 ]
@@ -55,3 +60,36 @@ def get_labels_by_name(dataset_name):
         raise ValueError(f"Dataset {dataset_name} mapper is not available.")
 
     return labels
+
+
+def get_size_by_name(dataset_name, split):
+    if dataset_name.startswith("imagenet"):
+        if dataset_name == "imagenet-10" or dataset_name == "imagenette":
+            n_classes = 10
+        elif dataset_name == "imagenet-25":
+            n_classes = 25
+        elif dataset_name == "imagenet-100":
+            n_classes = 100
+        elif dataset_name == "imagenet-250":
+            n_classes = 250
+        else:
+            raise ValueError(f"ImageNet dataset {dataset_name} is not available.")
+
+        train_total_size = IMAGENET_TRAIN_TOTAL * n_classes
+        init_size = IMAGENET_INIT_SIZE * n_classes
+        test_size = IMAGENET_TEST_SIZE * n_classes
+
+        if split == "test":
+            size = test_size
+        elif split == "init":
+            size = init_size
+        elif split == "pool":
+            size = train_total_size - init_size - test_size
+        elif split == "total":
+            size = train_total_size
+        else:
+            raise ValueError(f"ImageNet split {split} is not available.")
+    else:
+        raise ValueError(f"Dataset {dataset_name} is not available")
+
+    return size

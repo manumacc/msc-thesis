@@ -9,7 +9,7 @@ import random
 import tensorflow as tf
 import tensorflow_datasets as tfds
 
-from src.dataset.labels import get_labels_by_name
+from src.dataset.metadata import get_labels_by_name
 from src.utils import Profiling
 
 

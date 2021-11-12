@@ -4,13 +4,13 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.keras import backend
 
-from dataset.labels import get_labels_by_name
+from dataset.metadata import get_labels_by_name, get_size_by_name
 from dataset.record import load_dataset_from_tfrecord
 
 
 NUM_PARALLEL_READS = 4
-CYCLE_LENGTH = 4
-BLOCK_LENGTH = 16
+# CYCLE_LENGTH = 4
+# BLOCK_LENGTH = 4
 
 
 def debug(message):
@@ -26,11 +26,14 @@ class ActiveLearning:
                  preprocess_input_fn,
                  target_size,
                  save_models=False):
-        self.ds_init, self.ds_pool, self.ds_val, self.ds_test = (
-            self.initialize_dataset(dataset_name, dataset_path, num_parallel_reads=NUM_PARALLEL_READS)
-        )
+        self.ds_init = None
+        self.ds_pool = None
+        self.ds_val = None
+        self.ds_test = None
+        self.n_classes = None
+        self.ds_init_len = None
 
-        self.n_classes = len(get_labels_by_name(dataset_name))
+        self.initialize_dataset(dataset_name, dataset_path, num_parallel_reads=NUM_PARALLEL_READS)
 
         self.query_strategy = query_strategy
 
@@ -49,7 +52,12 @@ class ActiveLearning:
                            dataset_name,
                            dataset_path,
                            num_parallel_reads=None):
-        return self._load_splits_from_tfrecord(dataset_name, dataset_path, num_parallel_reads=num_parallel_reads)
+        self.ds_init, self.ds_pool, self.ds_val, self.ds_test = (
+            self._load_splits_from_tfrecord(dataset_name, dataset_path, num_parallel_reads=num_parallel_reads)
+        )
+
+        self.n_classes = len(get_labels_by_name(dataset_name))
+        self.ds_init_len = get_size_by_name(dataset_name, "init")
 
     @staticmethod
     def _load_splits_from_tfrecord(dataset_name, dataset_path, num_parallel_reads=None):
@@ -80,41 +88,39 @@ class ActiveLearning:
 
     def get_train(self,
                   batch_size,
-                  shuffle_buffer_size=1000,
-                  cache_train=False,
-                  cache_labeled_pool=True,
+                  shuffle_buffer_size=5000,
+                  labeled_pool_cache=True,
                   data_augmentation=True):
-        if cache_train and cache_labeled_pool:
-            print("WARNING: no need to cache labeled pool when caching training set already")
-
         ds_train_list = [self.ds_init]
+        ds_train_list_len = [self.ds_init_len]  # needed for uniform sampling
 
+        # Labeled pool
         if len(self.idx_labeled_pool) > 0:
             print("Labeled pool is present")
             ds_labeled_pool = self._filter_dataset_by_index(self.ds_pool, self.idx_labeled_pool)
             ds_labeled_pool = self._remove_index_from_pool(ds_labeled_pool)
 
-            # # DEBUG
-            # print("Iterating labeled pool")
-            # c = 0
-            # labpoolidx = []
-            # for x, y in ds_labeled_pool:
-            #     c += 1
-            #     labpoolidx.append(y)
-            # debug(f"Total number of elements inside labeled pool: {c}")
-            # debug(f"Class distribution: {np.unique(np.array(labpoolidx), return_counts=True)}")
-            # # /DEBUG
-
-            if cache_labeled_pool:
+            if labeled_pool_cache:
                 ds_labeled_pool = ds_labeled_pool.cache()
 
+            ds_labeled_pool = ds_labeled_pool.shuffle(shuffle_buffer_size)
+
             ds_train_list.append(ds_labeled_pool)
+            ds_train_list_len.append(len(self.idx_labeled_pool))
         else:
             print("Labeled pool is not present")
 
+        # Augmented set
         if self.ds_augment is not None:
             print("Augmented set is present")
-            ds_train_list.append(self.ds_augment)
+            ds_augment_len = 0
+            for _ in self.ds_augment:
+                ds_augment_len += 1
+            print(f"Length of augmented set: {ds_augment_len}")
+
+            ds_augment = self.ds_augment.shuffle(shuffle_buffer_size)
+            ds_train_list.append(ds_augment)
+            ds_train_list_len.append(ds_augment_len)
         else:
             print("Augmented set is not present")
 
@@ -122,21 +128,21 @@ class ActiveLearning:
             print("Only ds_init")
             ds_train = self.ds_init
         else:
-            print("Interleaving datasets")
-            # Interleave training datasets
-            ds_train = tf.data.Dataset.from_tensor_slices(ds_train_list)
-            ds_train = ds_train.interleave(lambda x: x, cycle_length=CYCLE_LENGTH, block_length=BLOCK_LENGTH, num_parallel_calls=tf.data.AUTOTUNE)
+            print("Interleaving datasets via weighted sampling")
+            # Interleaving is done in a weighted fashion, as the sizes of the
+            # datasets are all different. We want to take elements from the
+            # datasets such that they are all well shuffled together.
+            weights = np.array(ds_train_list_len) / np.sum(ds_train_list_len)
+            ds_train = tf.data.experimental.sample_from_datasets(ds_train_list, weights=weights, seed=None)  # non-deterministic shuffle
+
+            # OLD WAY VIA INTERLEAVING:
+            # ds_train = tf.data.Dataset.from_tensor_slices(ds_train_list)
+            # ds_train = ds_train.interleave(lambda x: x, cycle_length=CYCLE_LENGTH, block_length=BLOCK_LENGTH, num_parallel_calls=tf.data.AUTOTUNE)
 
         if data_augmentation:
             ds_train = self._apply_data_augmentation(ds_train)
 
         ds_train = self._preprocess_dataset(ds_train)
-
-        if cache_train:
-            # note: it probably doesn't make sense to cache this since it's
-            #  mostly initial training set and may be read directly from files
-            #  produced by `generate_dataset.py`. Instead, cache the labeled pool.
-            ds_train = ds_train.cache()
         ds_train = (
             ds_train
             .shuffle(shuffle_buffer_size)

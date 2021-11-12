@@ -8,7 +8,7 @@ import tensorflow as tf
 import tensorflow_addons as tfa
 
 import al
-from dataset.labels import get_labels_by_name
+from dataset.metadata import get_labels_by_name
 
 class Experiment:
     def __init__(self, config):
