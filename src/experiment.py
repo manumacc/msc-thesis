@@ -36,41 +36,34 @@ class Experiment:
                 print("Instantiating VGG16 model")
                 model = VGG16(
                     n_classes=self.config["n_classes"],
-                    dropout_rate=self.config["fc_dropout_rate"],
-                    dense_units=self.config["dense_units"],
-                    freeze_extractor=self.config["freeze_extractor"]
+                    dropout_rate=0.5,
+                    dense_units=4096,
+                    freeze_extractor=False
                 )
-            if self.config["model"] == "ResNet50":
+            elif self.config["model"] == "ResNet50":
                 from network.resnet50 import ResNet50
                 print("Instantiating ResNet50 model")
                 model = ResNet50(
                     n_classes=self.config["n_classes"],
-                    freeze_extractor=self.config["freeze_extractor"]
-                )
-            if self.config["model"] == "SimpleCNN":
-                from network.simplecnn import SimpleCNN
-                print("Instantiating SimpleCNN model")
-                model = SimpleCNN(
-                    n_classes=self.config["n_classes"]
+                    freeze_extractor=False
                 )
 
-            loss_fn = None
-            if self.config["loss"] == "categorical_crossentropy":
-                loss_fn = tf.keras.losses.CategoricalCrossentropy()
-
-            optimizer = None
+            loss_fn = tf.keras.losses.CategoricalCrossentropy()
             lr_init = self.config["lr_init"] if not base else self.config["base_lr_init"]
-            if self.config["optimizer"] == "SGDW":
-                optimizer = tfa.optimizers.SGDW(
-                    learning_rate=lr_init,
-                    momentum=self.config["momentum"],
-                    weight_decay=self.config["weight_decay"] if not base else self.config["base_weight_decay"]
-                )
-            if self.config["optimizer"] == "RMSprop":
-                optimizer = tf.keras.optimizers.RMSprop(
-                    learning_rate=lr_init,
-                    decay=self.config["weight_decay"] if not base else self.config["base_weight_decay"]
-                )
+
+            weight_decay = None
+            if self.config["model"] == "VGG16":
+                weight_decay = 5e-4
+            elif self.config["model"] == "ResNet50":
+                weight_decay = 1e-4
+
+            print(f"Weight decay set to {weight_decay}")
+
+            optimizer = tfa.optimizers.SGDW(
+                learning_rate=lr_init,
+                momentum=0.9,
+                weight_decay=weight_decay
+            )
 
             return model, loss_fn, optimizer, lr_init
 
@@ -81,12 +74,9 @@ class Experiment:
         if self.config["model"] == "VGG16":
             preprocess_fn = tf.keras.applications.vgg16.preprocess_input
             target_size = (224, 224)
-        if self.config["model"] == "ResNet50":
+        elif self.config["model"] == "ResNet50":
             preprocess_fn = tf.keras.applications.resnet50.preprocess_input
             target_size = (224, 224)
-        if self.config["model"] == "SimpleCNN":
-            preprocess_fn = lambda x: x / x.max()
-            target_size = (32, 32)
 
         query_strategy = None
         query_kwargs = {}
@@ -260,52 +250,30 @@ class Experiment:
 
         if train_base:
             callbacks = []
-            if "reduce_lr_restore_on_plateau" in self.config["base_callbacks"]:
-                from callbacks.reduce_lr_restore import ReduceLRRestoreOnPlateau
+            from callbacks.reload_checkpoint import ReloadCheckpointOnTrainEnd
 
-                best_model_checkpoint_path = pathlib.Path("models", "checkpoints", name, name)
-                callback_checkpoint = tf.keras.callbacks.ModelCheckpoint(
-                    best_model_checkpoint_path,
-                    monitor='val_loss',
-                    save_best_only=True,
-                    save_weights_only=True,
-                    verbose=0,
-                )
-                callbacks.append(callback_checkpoint)
-                callback_decay = ReduceLRRestoreOnPlateau(
-                    best_model_path=best_model_checkpoint_path,
-                    decay_schedule=self.config["base_reduce_lr_decay_schedule"],
-                    patience=self.config["base_reduce_lr_patience"],
-                    min_delta=self.config["base_reduce_lr_min_delta"],
-                    monitor='val_loss',
-                    verbose=1,
-                )
-                callbacks.append(callback_decay)
-            if "reduce_lr_on_plateau" in self.config["base_callbacks"]:
-                from callbacks.reload_checkpoint import ReloadCheckpointOnTrainEnd
-
-                best_model_checkpoint_path = pathlib.Path("models", "checkpoints", name, name)
-                callback_checkpoint = tf.keras.callbacks.ModelCheckpoint(
-                    best_model_checkpoint_path,
-                    monitor='val_loss',
-                    save_best_only=True,
-                    save_weights_only=True,
-                    verbose=0
-                )
-                callbacks.append(callback_checkpoint)
-                callback_reload_checkpoint = ReloadCheckpointOnTrainEnd(
-                    best_model_checkpoint_path
-                )
-                callbacks.append(callback_reload_checkpoint)
-                callback_decay = tf.keras.callbacks.ReduceLROnPlateau(
-                    monitor='val_loss',
-                    factor=0.1,
-                    patience=self.config["base_reduce_lr_patience"],
-                    min_delta=self.config["base_reduce_lr_min_delta"],
-                    min_lr=self.config["base_reduce_lr_min"],
-                    verbose=0,
-                )
-                callbacks.append(callback_decay)
+            best_model_checkpoint_path = pathlib.Path("models", "checkpoints", name, name)
+            callback_checkpoint = tf.keras.callbacks.ModelCheckpoint(
+                best_model_checkpoint_path,
+                monitor='val_loss',
+                save_best_only=True,
+                save_weights_only=True,
+                verbose=0
+            )
+            callbacks.append(callback_checkpoint)
+            callback_reload_checkpoint = ReloadCheckpointOnTrainEnd(
+                best_model_checkpoint_path
+            )
+            callbacks.append(callback_reload_checkpoint)
+            callback_decay = tf.keras.callbacks.ReduceLROnPlateau(
+                monitor='val_loss',
+                factor=0.1,
+                patience=self.config["base_reduce_lr_patience"],
+                min_delta=self.config["base_reduce_lr_min_delta"],
+                min_lr=self.config["base_reduce_lr_min"],
+                verbose=0,
+            )
+            callbacks.append(callback_decay)
 
             start = default_timer()
             logs = al_loop.train_base(
@@ -328,52 +296,30 @@ class Experiment:
             dir_logs = f"{name}_{start_dt.strftime('%Y%m%d_%H%M%S')}"
 
             callbacks = []
-            if "reduce_lr_restore_on_plateau" in self.config["callbacks"]:
-                from callbacks.reduce_lr_restore import ReduceLRRestoreOnPlateau
+            from callbacks.reload_checkpoint import ReloadCheckpointOnTrainEnd
 
-                best_model_checkpoint_path = pathlib.Path("models", "checkpoints", dir_logs, name)
-                callback_checkpoint = tf.keras.callbacks.ModelCheckpoint(
-                    best_model_checkpoint_path,
-                    monitor='val_loss',
-                    save_best_only=True,
-                    save_weights_only=True,
-                    verbose=0,
-                )
-                callbacks.append(callback_checkpoint)
-                callback_decay = ReduceLRRestoreOnPlateau(
-                    best_model_path=best_model_checkpoint_path,
-                    decay_schedule=self.config["reduce_lr_decay_schedule"],
-                    patience=self.config["reduce_lr_patience"],
-                    min_delta=self.config["reduce_lr_min_delta"],
-                    monitor='val_loss',
-                    verbose=1,
-                )
-                callbacks.append(callback_decay)
-            if "reduce_lr_on_plateau" in self.config["callbacks"]:
-                from callbacks.reload_checkpoint import ReloadCheckpointOnTrainEnd
-
-                best_model_checkpoint_path = pathlib.Path("models", "checkpoints", dir_logs, name)
-                callback_checkpoint = tf.keras.callbacks.ModelCheckpoint(
-                    best_model_checkpoint_path,
-                    monitor='val_loss',
-                    save_best_only=True,
-                    save_weights_only=True,
-                    verbose=0
-                )
-                callbacks.append(callback_checkpoint)
-                callback_reload_checkpoint = ReloadCheckpointOnTrainEnd(
-                    best_model_checkpoint_path
-                )
-                callbacks.append(callback_reload_checkpoint)
-                callback_decay = tf.keras.callbacks.ReduceLROnPlateau(
-                    monitor='val_loss',
-                    factor=0.1,
-                    patience=self.config["reduce_lr_patience"],
-                    min_delta=self.config["reduce_lr_min_delta"],
-                    min_lr=self.config["reduce_lr_min"],
-                    verbose=0,
-                )
-                callbacks.append(callback_decay)
+            best_model_checkpoint_path = pathlib.Path("models", "checkpoints", dir_logs, name)
+            callback_checkpoint = tf.keras.callbacks.ModelCheckpoint(
+                best_model_checkpoint_path,
+                monitor='val_loss',
+                save_best_only=True,
+                save_weights_only=True,
+                verbose=0
+            )
+            callbacks.append(callback_checkpoint)
+            callback_reload_checkpoint = ReloadCheckpointOnTrainEnd(
+                best_model_checkpoint_path
+            )
+            callbacks.append(callback_reload_checkpoint)
+            callback_decay = tf.keras.callbacks.ReduceLROnPlateau(
+                monitor='val_loss',
+                factor=0.1,
+                patience=self.config["reduce_lr_patience"],
+                min_delta=self.config["reduce_lr_min_delta"],
+                min_lr=self.config["reduce_lr_min"],
+                verbose=0,
+            )
+            callbacks.append(callback_decay)
 
             start = default_timer()
             logs = al_loop.learn(
