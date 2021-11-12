@@ -7,7 +7,7 @@ def parse_tf_example(tf_example, feature_description):
     return tf.io.parse_single_example(tf_example, feature_description)
 
 
-def load_dataset_from_tfrecord(filename, path=None, load_id=False, num_parallel_reads=None, deterministic=False):
+def load_dataset_from_tfrecord(filename, path=None, load_id=False, num_parallel_reads=None, deterministic=True):
     if path is None:
         path = pathlib.Path(".")
 
@@ -38,11 +38,11 @@ def load_dataset_from_tfrecord(filename, path=None, load_id=False, num_parallel_
         if not parts:
             raise ValueError(f"No records found at {path}")
         dataset = tf.data.TFRecordDataset(parts, num_parallel_reads=num_parallel_reads)
+        print(f"Loaded {len(parts)} TFRecord files at {path}")
 
     else:
         ### VERSION 2 (WITH INTERLEAVING)
-        fname_datasets = tf.data.TFRecordDataset.list_files(str(pathlib.Path(path, f"{filename}.tfrecord-*")),
-                                                            shuffle=True)  # non-deterministic order!
+        fname_datasets = tf.data.TFRecordDataset.list_files(str(pathlib.Path(path, f"{filename}.tfrecord-*")), shuffle=True)  # non-deterministic order!
 
         c = 0
         for f in fname_datasets:
@@ -51,7 +51,7 @@ def load_dataset_from_tfrecord(filename, path=None, load_id=False, num_parallel_
         if c == 0:
             raise ValueError(f"No records found at {path}")
         else:
-            print(f"Loaded {c} TFRecord files")
+            print(f"Loaded {c} TFRecord files at {path}")
 
         dataset = fname_datasets.interleave(
             tf.data.TFRecordDataset,
