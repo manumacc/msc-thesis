@@ -9,12 +9,6 @@ from dataset.record import load_dataset_from_tfrecord
 
 
 NUM_PARALLEL_READS = 4
-# CYCLE_LENGTH = 4
-# BLOCK_LENGTH = 4
-
-
-def debug(message):
-    print(f"[DEBUG]: {message}")
 
 
 class ActiveLearning:
@@ -61,15 +55,14 @@ class ActiveLearning:
 
     @staticmethod
     def _load_splits_from_tfrecord(dataset_name, dataset_path, num_parallel_reads=None):
-        ds_init = load_dataset_from_tfrecord(f"{dataset_name}-init", path=dataset_path, load_id=False, num_parallel_reads=num_parallel_reads)
+        ds_init = load_dataset_from_tfrecord(f"{dataset_name}-init", path=dataset_path, load_id=False, num_parallel_reads=num_parallel_reads, deterministic=False)
         ds_pool = load_dataset_from_tfrecord(f"{dataset_name}-pool", path=dataset_path, load_id=True, num_parallel_reads=num_parallel_reads, deterministic=True)
-        ds_val = load_dataset_from_tfrecord(f"{dataset_name}-val", path=dataset_path, load_id=False, num_parallel_reads=num_parallel_reads)
-        ds_test = load_dataset_from_tfrecord(f"{dataset_name}-test", path=dataset_path, load_id=False, num_parallel_reads=num_parallel_reads)
+        ds_val = load_dataset_from_tfrecord(f"{dataset_name}-val", path=dataset_path, load_id=False, num_parallel_reads=num_parallel_reads, deterministic=True)
+        ds_test = load_dataset_from_tfrecord(f"{dataset_name}-test", path=dataset_path, load_id=False, num_parallel_reads=num_parallel_reads, deterministic=True)
 
         return ds_init, ds_pool, ds_val, ds_test
 
-    def initialize_base_model(self,
-                              model_name):
+    def initialize_base_model(self, model_name):
         self.model, loss_fn, optimizer, lr_init = self.model_initialization_fn()
 
         print("Optimizer configuration")
@@ -88,7 +81,7 @@ class ActiveLearning:
 
     def get_train(self,
                   batch_size,
-                  shuffle_buffer_size=5000,
+                  shuffle_buffer_size=2000,
                   labeled_pool_cache=True,
                   data_augmentation=True):
         ds_train_list = [self.ds_init]
@@ -134,10 +127,6 @@ class ActiveLearning:
             # datasets such that they are all well shuffled together.
             weights = np.array(ds_train_list_len) / np.sum(ds_train_list_len)
             ds_train = tf.data.experimental.sample_from_datasets(ds_train_list, weights=weights, seed=None)  # non-deterministic shuffle
-
-            # OLD WAY VIA INTERLEAVING:
-            # ds_train = tf.data.Dataset.from_tensor_slices(ds_train_list)
-            # ds_train = ds_train.interleave(lambda x: x, cycle_length=CYCLE_LENGTH, block_length=BLOCK_LENGTH, num_parallel_calls=tf.data.AUTOTUNE)
 
         if data_augmentation:
             ds_train = self._apply_data_augmentation(ds_train)
