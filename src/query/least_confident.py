@@ -16,7 +16,7 @@ class LeastConfidentQueryStrategy(QueryStrategy):
         """
 
         idx_pool = self._get_pool_indices(ds_pool)
-        ds_pool_preprocess = self._preprocess_dataset(ds_pool, metadata, query_batch_size)
+        ds_pool_preprocess = self._preprocess_pool_dataset(ds_pool, metadata, query_batch_size)
 
         preds = self.model.predict(ds_pool_preprocess,
                                    verbose=1)

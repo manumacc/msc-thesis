@@ -15,7 +15,7 @@ class QueryStrategy:
     def __call__(self, ds_pool, metadata, n_query_instances, current_iter, seed=None):
         raise NotImplementedError("Can't call a base class")
 
-    def _preprocess_dataset(self, ds_pool, metadata, query_batch_size):
+    def _preprocess_pool_dataset(self, ds_pool, metadata, query_batch_size):
         def tf_map_preprocess(i, v):
             return self.preprocess_input_fn(v[0]), tf.one_hot(v[1], depth=metadata["n_classes"])
 

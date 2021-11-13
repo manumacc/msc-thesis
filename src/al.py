@@ -238,7 +238,7 @@ class ActiveLearning:
 
         ds_noindex = (
             ds_labeled_pool
-            .map(tf_map_remove_index, num_parallel_calls=tf.data.AUTOTUNE)
+            .map(tf_map_remove_index, num_parallel_calls=tf.data.AUTOTUNE, deterministic=True)
         )
 
         return ds_noindex

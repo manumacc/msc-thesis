@@ -1,4 +1,5 @@
 import numpy as np
+import tensorflow as tf
 from PIL import Image
 
 from ebano.batchebano import Explainer
@@ -13,87 +14,127 @@ class EBAnOQueryStrategy(QueryStrategy):
                  n_query_instances,
                  current_iter,
                  seed=None,
-                 query_batch_size=32,
-                 n_classes=None,
-                 input_shape=None,
-                 layers_to_analyze=None,
-                 hypercolumn_features=None,
-                 hypercolumn_reduction=None,
-                 clustering=None,
-                 min_features=2,
-                 max_features=5,
-                 use_gpu=False,
-                 augment=None,
-                 strategy=None,
-                 base_strategy=None,
-                 query_limit=None,
-                 augment_limit=None,
-                 min_diff=None,
-                 eps=None,
-                 **ebano_kwargs):
+                 query_batch_size=None,
+                 # n_classes=None,
+                 # input_shape=None,
+                 # layers_to_analyze=None,
+                 # hypercolumn_features=None,
+                 # hypercolumn_reduction=None,
+                 # clustering=None,
+                 # min_features=2,
+                 # max_features=5,
+                 # use_gpu=False,
+                 # augment=None,
+                 # strategy=None,
+                 # base_strategy=None,
+                 # query_limit=None,
+                 # augment_limit=None,
+                 # min_diff=None,
+                 # **ebano_kwargs):
+                 **query_kwargs):
+        augment = query_kwargs["augment"]
+        base_strategy = query_kwargs["base_strategy"]
+        query_limit = query_kwargs["query_limit"]
+        augment_limit = query_kwargs["augment_limit"]
+        min_diff = query_kwargs["min_diff"]
 
-        self.ds_augment = None  # reset augmented set
+        idx_pool = self._get_pool_indices(ds_pool)
+        ds_pool_preprocess = self._preprocess_pool_dataset(ds_pool, metadata, query_batch_size)
 
         # Predict
-        X_pool_preprocessed = self.preprocess_input_fn(np.copy(X_pool))
-        preds = self.model.predict(X_pool_preprocessed,
-                                   batch_size=query_batch_size,
-                                   verbose=1)  # (len(X_pool), n_classes)
-        del X_pool_preprocessed
-        cois = np.argmax(preds, axis=1)
+        preds = self.model.predict(ds_pool_preprocess, verbose=1)  # (len(X_pool), n_classes)
+        cois = np.argmax(preds, axis=1)  # class-of-interest is the prediction
+
+        # Select subset of indices (if specified)
+        if query_kwargs["subset"] is not None:
+            if query_kwargs["subset"] > len(idx_pool):
+                print(f"Subset size {query_kwargs['subset']} is higher than pool size {len(idx_pool)}.")
+                print(f"Setting subset size equal to pool size.")
+                idx_to_process = idx_pool
+            else:
+                # Subset is taken randomly from the unlabeled pool
+                rng = np.random.default_rng(seed)
+                idx_to_process = rng.choice(idx_pool, size=query_kwargs["subset"], replace=False)
+                print(f"Fetched a subset of size {len(idx_to_process)} over {len(idx_pool)}")
+        else:
+            idx_to_process = idx_pool
+            print(f"Fetched all elements")
 
         # Explain via BatchEBAnO
+        self.explainer = Explainer(
+            model=self.model,
+            n_classes=query_kwargs["n_classes"],
+            input_shape=query_kwargs["input_shape"],
+            layers_to_analyze=query_kwargs["layers_to_analyze"],
+        )
+
         nPIR_best = []
         nPIRP_best = []
         X_masks = []
 
-        explainer = Explainer(
-            model=self.model,
-            n_classes=n_classes,
-            input_shape=input_shape,
-            layers_to_analyze=layers_to_analyze,
-        )
+        X_buffer = []
+        cois_buffer = []
+        batch_count = 0
 
-        n_batches = int(np.ceil(len(X_pool) / query_batch_size))
-        for i in range(n_batches):
-            batch_len = len(X_pool[i*query_batch_size:(i+1)*query_batch_size])
-            if batch_len == 0:  # skip batch if empty
-                print("Empty batch")
-                pass
+        idx_pool_subset = []
+        preds_subset = []
+        for (tf_i, (tf_x, tf_y)), coi, pred in zip(ds_pool, cois, preds):  # Non-preprocessed pool
+            if tf_i.numpy() not in idx_to_process:
+                continue
 
-            with Profiling(f"Processing batch {i+1}/{n_batches} of size {batch_len}"):
-                results = explainer.fit_batch(
-                    X_pool[i*query_batch_size:(i+1)*query_batch_size],
-                    cois=cois[i*query_batch_size:(i+1)*query_batch_size],
-                    preprocess_input_fn=self.preprocess_input_fn,  # data is already preprocessed
-                    hypercolumn_features=hypercolumn_features,
-                    hypercolumn_reduction=hypercolumn_reduction,
-                    clustering=clustering,
-                    min_features=min_features,
-                    max_features=max_features,
-                    display_plots=False,
-                    return_results=True,
-                    use_gpu=False,
-                    seed=seed,
-                    niter=ebano_kwargs["niter"],
-                )
+            X_buffer.append(tf_x.numpy())
+            cois_buffer.append(coi)
 
+            idx_pool_subset.append(tf_i.numpy())
+            preds_subset.append(pred)
+
+            print(f"DEBUG: coi = max(pred) = {coi}, y gt = {tf_y.numpy()}")
+
+            if len(X_buffer) == query_batch_size:  # buffer filled
+                with Profiling(f"Processing batch {batch_count+1}"):
+                    results = self.ebano_process(X_buffer, cois_buffer, seed=seed, **query_kwargs)
+                    for r in results:
+                        nPIR_best.append(r["nPIR_best"])
+                        nPIRP_best.append(r["nPIRP_best"])
+                        if augment:
+                            X_masks.append(r["X_masks"])
+
+                X_buffer.clear()
+                cois_buffer.clear()
+
+                batch_count += 1
+
+        # Process final batch, if it exists
+        if len(X_buffer) > 0:
+            print(f"Processing last batch of size {len(X_buffer)}")
+            results = self.ebano_process(X_buffer, cois_buffer, seed=seed, **query_kwargs)
             for r in results:
                 nPIR_best.append(r["nPIR_best"])
                 nPIRP_best.append(r["nPIRP_best"])
                 if augment:
                     X_masks.append(r["X_masks"])
+        else:
+            print("Last batch is empty")
 
         assert len(nPIR_best) == len(nPIRP_best)
+        idx_pool_subset = np.array(idx_pool_subset)
+        preds_subset = np.array(preds_subset)
+
+        # Note that idx_pool_subset contains REAL indices from the pool dataset,
+        # i.e., the ones you get when iterating through ds_pool.
+
+        # Note that nPIR_best, nPIRP_best, X_masks are all ordered in the same
+        # way as idx_pool_subset
 
         # EBAnO query
-        if strategy == "rank":
-            idx_candidates, nPIR_max_f_i = self.query_most_influential_has_low_precision_difference_rank(nPIR_best, nPIRP_best, min_diff=min_diff)
-            print(f"Candidates queried by EBAnO: {len(idx_candidates)} with diff={min_diff}")
-        else:
-            idx_candidates, nPIR_max_f_i = self.query_most_influential_has_low_precision(nPIR_best, nPIRP_best, eps=eps)
-            np.random.default_rng(seed).shuffle(idx_candidates)  # shuffle to eventually randomly choose a subset
-            print(f"Candidates queried by EBAnO: {len(idx_candidates)} with epsilon={eps}")
+        idx_candidates, nPIR_max_f_i = self.query_most_influential_has_low_precision_difference_rank(nPIR_best, nPIRP_best, min_diff=min_diff)
+        print(f"Candidates queried by EBAnO: {len(idx_candidates)} with diff={min_diff}")
+        # idx_candidates contains indices that refer to idx_pool_subset
+        # this means that any element in idx_candidates satisfies 0 < x < len(idx_pool_subset)
+        # DEBUG
+        for ii in idx_candidates:
+            assert 0 < ii < len(idx_pool_subset)
+        # /DEBUG
 
         # Limit number of candidates queried by EBAnO
         if query_limit > n_query_instances:
@@ -104,23 +145,27 @@ class EBAnOQueryStrategy(QueryStrategy):
             print(f"WARNING: augment_limit set to {n_query_instances}")
 
         idx_query_ebano = idx_candidates[:query_limit]
+        # idx_query_ebano still contains indices that refer to idx_pool_subset
+        print(f"EBAnO selected {len(idx_query_ebano)} samples.")
 
         # Mix EBAnO query with chosen base strategy
         if len(idx_query_ebano) < n_query_instances:  # If too few queried by EBAnO, add more by selecting among non-candidates using base_strategy
-            idx_others = np.delete(np.arange(len(X_pool)), idx_query_ebano)
+            idx_others = np.delete(np.arange(len(idx_pool_subset)), idx_query_ebano)
+            # idx_others contains indices that refer to idx_pool_subset
+
             n_missing = n_query_instances - len(idx_query_ebano)
 
             if base_strategy == "random":
                 rng = np.random.default_rng(seed)
                 idx_additional = rng.choice(idx_others, size=n_missing, replace=False)
             elif base_strategy == "least-confident":
-                max_preds = preds.max(axis=1)
-                idx_idx_others_sorted = np.argsort(max_preds[idx_others])
-                idx_additional = idx_others[idx_idx_others_sorted][:n_missing]
+                max_preds = preds_subset.max(axis=1)
+                idx_of_idx_others_sorted = np.argsort(max_preds[idx_others])
+                idx_additional = idx_others[idx_of_idx_others_sorted][:n_missing]
             elif base_strategy == "entropy":
-                pool_entropy = -np.sum(preds * np.log(preds), axis=-1)
-                idx_idx_others_sorted = np.argsort(pool_entropy[idx_others])[::-1]
-                idx_additional = idx_others[idx_idx_others_sorted][:n_missing]
+                pool_entropy = -np.sum(preds_subset * np.log(preds_subset), axis=-1)
+                idx_of_idx_others_sorted = np.argsort(pool_entropy[idx_others])[::-1]
+                idx_additional = idx_others[idx_of_idx_others_sorted][:n_missing]
             else:
                 raise ValueError(f"Base strategy {base_strategy} not implemented.")
 
@@ -128,61 +173,97 @@ class EBAnOQueryStrategy(QueryStrategy):
         else:
             idx_query = idx_query_ebano
 
-        if augment and len(idx_candidates) > 0:  # Create augmented dataset
-            print("Create augmented set")
-
+        # Augmented dataset
+        self.ds_augment = None  # reset augmented set
+        if augment and len(idx_candidates) > 0:
+            print("Create ds_augment")
             idx_augment = idx_candidates[:augment_limit]  # Limit number of candidates queried by EBAnO
+            # idx_augment contains indices that refer to idx_pool_subset
 
-            X_augmented_set = []
-            y_augmented_set = []
-            for i in idx_augment:
-                x_original = X_pool[i]
+            X_augment = []
+            y_augment = []
+            DEBUG_nPIR_max_f_i_array = []
+            DEBUG_nPIR_arr, DEBUG_nPIRP_arr = [], []
+            # for (tf_i, (tf_x, tf_y)) in ds_pool:
+            for debug_i, (tf_i, (tf_x, tf_y)) in enumerate(ds_pool):  # DEBUG
+                if tf_i.numpy() not in idx_pool_subset[idx_augment]:
+                    continue
 
-                x_masks = X_masks[i]
-                f_i = nPIR_max_f_i[i]
-                x_perturbed = self.get_perturbed_image(x_original, x_masks, f_i, perturb_filter=explainer.perturb_filter, flip=True)
+                # ds pool          6  2  8  4  7 ...
 
-                X_augmented_set.append(x_perturbed)
-                y_augmented_set.append(y_pool[i])
+                # idx_pool_subset [6, 2, 8, 4, 7, ...]
+                #                  0  1  2  3  4  ...
+                # idx_augment     [1, 3, 4, ...]   ^
+                #                  0  1  2  ...
 
-            X_augmented_set = np.array(X_augmented_set)
-            y_augmented_set = np.array(y_augmented_set)
+                # We need to get the index of idx_pool_subset to which
+                # the current element (pool index tf_i) corresponds.
+                i_of_idx_pool_subset = np.argwhere(idx_pool_subset == tf_i.numpy())[0,0]
 
-            self.ds_augment = (X_augmented_set, y_augmented_set)
+                # We also need to get the index of idx_augment to which the
+                # current element corresponds.
+                i_of_idx_augment = np.argwhere(idx_augment == i_of_idx_pool_subset)[0,0]
 
-        return idx_query
+                x_original = tf_x.numpy()
 
-    @staticmethod
-    def query_most_influential_has_low_precision(nPIR, nPIRP, eps=0.):
-        """
-        Select samples whose most influential interpretable feature on the class
-        of interest, i.e., the feature that has highest nPIR, is not focused on
-        the class of interest, i.e., it has low associated nPIRP. Only choose
-        samples whose most influential interpretable feature has nPIR above 0
-        (most samples satisfy this requirement).
+                x_masks = X_masks[i_of_idx_pool_subset]
+                f_i = nPIR_max_f_i[i_of_idx_augment]
 
-        Returns a list of indices corresponding to queried images.
-        Returns an array of shape (n,) containing the indices of the
-        interpretable feature corresponding to the highest nPIR for each image.
-        """
+                DEBUG_nPIR_max_f_i_array.append(f_i)
+                DEBUG_nPIR_arr.append(nPIR_best[i_of_idx_pool_subset])
+                DEBUG_nPIRP_arr.append(nPIRP_best[i_of_idx_pool_subset])
 
-        n = len(nPIR)
+                x_perturbed = self.get_perturbed_image(x_original, x_masks, f_i, perturb_filter=self.explainer.perturb_filter, flip=True)
+                X_augment.append(x_perturbed)
+                y_augment.append(tf_y.numpy())
 
-        nPIR_max = np.empty(n)
-        nPIRP_of_nPIR_max = np.empty(n)
-        nPIR_max_f_i = np.empty(n, dtype=int)
-        for i in range(n):
-            idx = np.argmax(nPIR[i])
-            nPIR_max[i] = nPIR[i][idx]
-            nPIRP_of_nPIR_max[i] = nPIRP[i][idx]
-            nPIR_max_f_i[i] = idx
+                # DEBUG
+                import matplotlib.pyplot as plt
+                fig, ax = plt.subplots()
+                ax.imshow(x_perturbed)
+                fig.save(f"DEBUG_x_perturbed_{debug_i}.png")
+                # /DEBUG
 
-        idx_candidates = []
-        for i in range(n):
-            if nPIR_max[i] > 0. and nPIRP_of_nPIR_max[i] < (0. + eps):
-                idx_candidates.append(i)
+            X_augment = np.array(X_augment)
+            y_augment = np.array(y_augment)
 
-        return idx_candidates, nPIR_max_f_i
+            # DEBUG
+            with open("DEBUG_ebano_query.txt", "w") as f:
+                f.write("idx_pool_subset:")
+                f.write(repr(idx_pool_subset))
+                f.write("----------------")
+                f.write("y_augment:")
+                f.write(repr(y_augment))
+                f.write("DEBUG_nPIR_max_f_i_array")
+                f.write(repr(DEBUG_nPIR_max_f_i_array))
+                f.write("DEBUG_nPIR_arr")
+                f.write(repr(DEBUG_nPIR_arr))
+                f.write("DEBUG_nPIRP_arr")
+                f.write(repr(DEBUG_nPIRP_arr))
+            # /DEBUG
+
+            self.ds_augment = tf.data.Dataset.from_tensor_slices((X_augment, y_augment))
+
+        return idx_pool_subset[idx_query]
+
+    def ebano_process(self, X, cois, seed=None, **kwargs):
+        results = self.explainer.fit_batch(
+            np.array(X),
+            cois=cois,
+            preprocess_input_fn=self.preprocess_input_fn,
+            hypercolumn_features=kwargs["hypercolumn_features"],
+            hypercolumn_reduction=kwargs["hypercolumn_reduction"],
+            clustering=kwargs["clustering"],
+            min_features=kwargs["min_features"],
+            max_features=kwargs["max_features"],
+            display_plots=False,
+            return_results=True,
+            use_gpu=False,
+            seed=seed,
+            niter=kwargs["niter"],
+        )
+
+        return results
 
     @staticmethod
     def query_most_influential_has_low_precision_difference_rank(nPIR, nPIRP, min_diff=0.):

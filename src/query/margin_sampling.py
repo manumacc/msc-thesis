@@ -9,8 +9,7 @@ class MarginSamplingQueryStrategy(QueryStrategy):
                  n_query_instances,
                  current_iter,
                  seed=None,
-                 query_batch_size=None,
-                 shuffle_buffer_size=1000):
+                 query_batch_size=None):
         """Selects the instances whose margin is smallest.
 
         The margin for a given instance is defined as the difference between the
@@ -19,7 +18,7 @@ class MarginSamplingQueryStrategy(QueryStrategy):
         """
 
         idx_pool = self._get_pool_indices(ds_pool)
-        ds_pool_preprocess = self._preprocess_dataset(ds_pool, metadata, query_batch_size)
+        ds_pool_preprocess = self._preprocess_pool_dataset(ds_pool, metadata, query_batch_size)
 
         preds = self.model.predict(ds_pool_preprocess,
                                    verbose=1)  # (len(X_pool), n_classes)
