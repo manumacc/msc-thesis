@@ -36,27 +36,27 @@ class MixQueryStrategy(QueryStrategy):
             from query.margin_sampling import MarginSamplingQueryStrategy
             qs = MarginSamplingQueryStrategy()
             qs.set_model(self.model, self.preprocess_input_fn)
-            return qs(X_pool, y_pool, n_query_instances, current_iter, seed=seed, query_batch_size=query_batch_size)
+            return qs(ds_pool, metadata, n_query_instances, current_iter, seed=seed, query_batch_size=query_batch_size)
         elif current_method == "entropy":
             from query.entropy import EntropyQueryStrategy
             qs = EntropyQueryStrategy()
             qs.set_model(self.model, self.preprocess_input_fn)
-            return qs(X_pool, y_pool, n_query_instances, current_iter, seed=seed, query_batch_size=query_batch_size)
+            return qs(ds_pool, metadata, n_query_instances, current_iter, seed=seed, query_batch_size=query_batch_size)
         elif current_method == "least-confident":
             from query.least_confident import LeastConfidentQueryStrategy
             qs = LeastConfidentQueryStrategy()
             qs.set_model(self.model, self.preprocess_input_fn)
-            return qs(X_pool, y_pool, n_query_instances, current_iter, seed=seed, query_batch_size=query_batch_size)
+            return qs(ds_pool, metadata, n_query_instances, current_iter, seed=seed, query_batch_size=query_batch_size)
         elif current_method == "random":
             from query.random import RandomQueryStrategy
             qs = RandomQueryStrategy()
-            return qs(X_pool, y_pool, n_query_instances, current_iter, seed=seed)
+            return qs(ds_pool, metadata, n_query_instances, current_iter, seed=seed)
         elif current_method == "ebano":
             from query.ebano_query import EBAnOQueryStrategy
             qs = EBAnOQueryStrategy()
             qs.set_model(self.model, self.preprocess_input_fn)
-            idx_query = qs(X_pool,
-                           y_pool,
+            idx_query = qs(ds_pool,
+                           metadata,
                            n_query_instances,
                            current_iter,
                            seed=seed,
