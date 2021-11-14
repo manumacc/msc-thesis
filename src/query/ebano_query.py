@@ -72,8 +72,6 @@ class EBAnOQueryStrategy(QueryStrategy):
             idx_pool_subset.append(tf_i.numpy())
             preds_subset.append(pred)
 
-            print(f"DEBUG: coi = max(pred) = {coi}, y gt = {tf_y.numpy()}")
-
             if len(X_buffer) == query_batch_size:  # buffer filled
                 with Profiling(f"Processing batch {batch_count+1}"):
                     results = self.ebano_process(X_buffer, cois_buffer, seed=seed, **query_kwargs)
@@ -116,11 +114,8 @@ class EBAnOQueryStrategy(QueryStrategy):
         print(f"Candidates queried by EBAnO: {len(idx_candidates)} with diff={min_diff}")
         # idx_candidates contains REAL indices from the pool dataset. These
         # are ORDERED in a ranked fashion, per the ebano specifications.
-        # This means that any element in idx_candidates satisfies min(idx_pool_subset) < x < max(idx_pool_subset)
-        # DEBUG
-        for ii in idx_candidates:
-            assert min(idx_pool_subset) < ii < max(idx_pool_subset)
-        # /DEBUG
+        # This means that any element in idx_candidates satisfies:
+        #   min(idx_pool_subset) < x < max(idx_pool_subset)
         # NOTE: nPIR_max_f_i ordering is the same as idx_pool_subset and NOT
         # the same as idx_candidates. This makes nPIR_max_f_i consistent with
         # the ordering of nPIR_best, nPIRP_best, X_masks.
@@ -181,11 +176,7 @@ class EBAnOQueryStrategy(QueryStrategy):
 
             X_augment = []
             y_augment = []
-            DEBUG_nPIR_max_f_i_array = []
-            DEBUG_nPIR_arr, DEBUG_nPIRP_arr = [], []
-            DEBUG_diff = []
-            # for (tf_i, (tf_x, tf_y)) in ds_pool:
-            for debug_i, (tf_i, (tf_x, tf_y)) in enumerate(ds_pool):  # DEBUG
+            for (tf_i, (tf_x, tf_y)) in ds_pool:
                 if tf_i.numpy() not in idx_augment:
                     continue
 
@@ -196,41 +187,12 @@ class EBAnOQueryStrategy(QueryStrategy):
                 x_masks = X_masks[i_of_idx_pool_subset]
                 f_i = nPIR_max_f_i[i_of_idx_pool_subset]
 
-                DEBUG_nPIR_max_f_i_array.append(f_i)
-                DEBUG_nPIR_arr.append(nPIR_best[i_of_idx_pool_subset])
-                DEBUG_nPIRP_arr.append(nPIRP_best[i_of_idx_pool_subset])
-                DEBUG_diff.append(nPIR_best[i_of_idx_pool_subset][f_i] - nPIRP_best[i_of_idx_pool_subset][f_i])
-
                 x_perturbed = self.get_perturbed_image(x_original, x_masks, f_i, perturb_filter=self.explainer.perturb_filter, flip=True)
                 X_augment.append(x_perturbed)
                 y_augment.append(tf_y.numpy())
 
-                # DEBUG
-                import matplotlib.pyplot as plt
-                fig, ax = plt.subplots()
-                ax.imshow(x_perturbed/255)
-                fig.savefig(f"DEBUG_x_perturbed_{debug_i}.png")
-                # /DEBUG
-
             X_augment = np.array(X_augment)
             y_augment = np.array(y_augment)
-
-            # DEBUG
-            with open("DEBUG_ebano_query.txt", "w") as f:
-                f.write("idx_pool_subset:")
-                f.write(repr(idx_pool_subset))
-                f.write("----------------")
-                f.write("y_augment:")
-                f.write(repr(y_augment))
-                f.write("DEBUG_nPIR_max_f_i_array")
-                f.write(repr(DEBUG_nPIR_max_f_i_array))
-                f.write("DEBUG_nPIR_arr")
-                f.write(repr(DEBUG_nPIR_arr))
-                f.write("DEBUG_nPIRP_arr")
-                f.write(repr(DEBUG_nPIRP_arr))
-                f.write("DEBUG_diff")
-                f.write(repr(DEBUG_diff))
-            # /DEBUG
 
             self.ds_augment = tf.data.Dataset.from_tensor_slices((X_augment, y_augment))
 
