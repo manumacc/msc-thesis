@@ -21,7 +21,7 @@ config_dict = {
     "lr_init": 0.01,  # ResNet: 0.01; VGG16: 0.001
 
     # decay_early_stopping
-    "reduce_lr_patience": 20,
+    "reduce_lr_patience": 25,
     "reduce_lr_min_delta": 0.001,  # Empirically set. ResNet: 0.001
     "reduce_lr_min": 0.0001,  # ResNet: 0.0001 (0.01/(10*2)); VGG16: 0.00001 (0.001/(10*2))
 
