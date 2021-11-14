@@ -20,6 +20,8 @@ arg_parser.add_argument("--ebano-mix-augment-limit", nargs='?', default=None, ty
 arg_parser.add_argument("--ebano-mix-min-diff", nargs='?', default=None, type=float, dest="ebano_mix_min_diff")
 arg_parser.add_argument("--ebano-mix-subset", nargs='?', default=None, type=int, dest="ebano_mix_subset")
 
+arg_parser.add_argument("--dataset-hpc", nargs='?', default=None, type=str, dest="dataset_hpc")
+
 arg_parser.add_argument("--patience", nargs='?', default=None, type=int)
 
 if __name__ == '__main__':
@@ -38,4 +40,5 @@ if __name__ == '__main__':
                    ebano_mix_query_limit=args.ebano_mix_query_limit,
                    ebano_mix_augment_limit=args.ebano_mix_augment_limit,
                    ebano_mix_min_diff=args.ebano_mix_min_diff,
-                   ebano_mix_subset=args.ebano_mix_subset)
+                   ebano_mix_subset=args.ebano_mix_subset,
+                   dataset_hpc=args.dataset_hpc)

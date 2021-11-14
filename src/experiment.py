@@ -22,6 +22,11 @@ class Experiment:
         if seed is not None:
             self.config["experiment_seed"] = seed
 
+        if kwargs["dataset_hpc"] is not None:
+            self.config["dataset_name"] = f"{kwargs['dataset_hpc']}"
+            self.config["dataset_path"] = f"data/{kwargs['dataset_hpc']}"
+            print(f"Set dataset to {self.config['dataset_name']} at {self.config['dataset_path']}")
+
         start_dt = datetime.datetime.now()
 
         print("Configuration:")
