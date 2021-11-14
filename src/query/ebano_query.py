@@ -15,22 +15,6 @@ class EBAnOQueryStrategy(QueryStrategy):
                  current_iter,
                  seed=None,
                  query_batch_size=None,
-                 # n_classes=None,
-                 # input_shape=None,
-                 # layers_to_analyze=None,
-                 # hypercolumn_features=None,
-                 # hypercolumn_reduction=None,
-                 # clustering=None,
-                 # min_features=2,
-                 # max_features=5,
-                 # use_gpu=False,
-                 # augment=None,
-                 # strategy=None,
-                 # base_strategy=None,
-                 # query_limit=None,
-                 # augment_limit=None,
-                 # min_diff=None,
-                 # **ebano_kwargs):
                  **query_kwargs):
         augment = query_kwargs["augment"]
         base_strategy = query_kwargs["base_strategy"]
@@ -122,19 +106,24 @@ class EBAnOQueryStrategy(QueryStrategy):
 
         # Note that idx_pool_subset contains REAL indices from the pool dataset,
         # i.e., the ones you get when iterating through ds_pool.
-
         # Note that nPIR_best, nPIRP_best, X_masks are all ordered in the same
-        # way as idx_pool_subset
+        # way as idx_pool_subset, as they are extracted concurrently.
+        # Also, idx_pool_subset and preds_subset correspond to each other.
 
         # EBAnO query
         idx_candidates, nPIR_max_f_i = self.query_most_influential_has_low_precision_difference_rank(nPIR_best, nPIRP_best, min_diff=min_diff)
+        idx_candidates = idx_pool_subset[idx_candidates]
         print(f"Candidates queried by EBAnO: {len(idx_candidates)} with diff={min_diff}")
-        # idx_candidates contains indices that refer to idx_pool_subset
-        # this means that any element in idx_candidates satisfies 0 < x < len(idx_pool_subset)
+        # idx_candidates contains REAL indices from the pool dataset. These
+        # are ORDERED in a ranked fashion, per the ebano specifications.
+        # This means that any element in idx_candidates satisfies min(idx_pool_subset) < x < max(idx_pool_subset)
         # DEBUG
         for ii in idx_candidates:
-            assert 0 < ii < len(idx_pool_subset)
+            assert min(idx_pool_subset) < ii < max(idx_pool_subset)
         # /DEBUG
+        # NOTE: nPIR_max_f_i ordering is the same as idx_pool_subset and NOT
+        # the same as idx_candidates. This makes nPIR_max_f_i consistent with
+        # the ordering of nPIR_best, nPIRP_best, X_masks.
 
         # Limit number of candidates queried by EBAnO
         if query_limit > n_query_instances:
@@ -145,13 +134,23 @@ class EBAnOQueryStrategy(QueryStrategy):
             print(f"WARNING: augment_limit set to {n_query_instances}")
 
         idx_query_ebano = idx_candidates[:query_limit]
-        # idx_query_ebano still contains indices that refer to idx_pool_subset
+        # idx_query_ebano contains again REAL indices.
         print(f"EBAnO selected {len(idx_query_ebano)} samples.")
 
         # Mix EBAnO query with chosen base strategy
         if len(idx_query_ebano) < n_query_instances:  # If too few queried by EBAnO, add more by selecting among non-candidates using base_strategy
-            idx_others = np.delete(np.arange(len(idx_pool_subset)), idx_query_ebano)
-            # idx_others contains indices that refer to idx_pool_subset
+            # Since we already queried the samples at pool indices idx_query_ebano,
+            # we remove them from the pool from which we take the "other" samples
+            # using the chosen base strategy.
+            idx_others = []
+            preds_others = []
+            for i, pred in zip(idx_pool_subset, preds_subset):
+                if i not in idx_query_ebano:
+                    idx_others.append(i)
+                    preds_others.append(pred)
+            idx_others = np.array(idx_others)
+            preds_others = np.array(preds_others)
+            # idx_others contains REAL indices
 
             n_missing = n_query_instances - len(idx_query_ebano)
 
@@ -159,12 +158,12 @@ class EBAnOQueryStrategy(QueryStrategy):
                 rng = np.random.default_rng(seed)
                 idx_additional = rng.choice(idx_others, size=n_missing, replace=False)
             elif base_strategy == "least-confident":
-                max_preds = preds_subset.max(axis=1)
-                idx_of_idx_others_sorted = np.argsort(max_preds[idx_others])
+                max_preds_others = preds_others.max(axis=1)
+                idx_of_idx_others_sorted = np.argsort(max_preds_others)
                 idx_additional = idx_others[idx_of_idx_others_sorted][:n_missing]
             elif base_strategy == "entropy":
-                pool_entropy = -np.sum(preds_subset * np.log(preds_subset), axis=-1)
-                idx_of_idx_others_sorted = np.argsort(pool_entropy[idx_others])[::-1]
+                entropy_others = -np.sum(preds_others * np.log(preds_others), axis=-1)
+                idx_of_idx_others_sorted = np.argsort(entropy_others)[::-1]
                 idx_additional = idx_others[idx_of_idx_others_sorted][:n_missing]
             else:
                 raise ValueError(f"Base strategy {base_strategy} not implemented.")
@@ -178,40 +177,29 @@ class EBAnOQueryStrategy(QueryStrategy):
         if augment and len(idx_candidates) > 0:
             print("Create ds_augment")
             idx_augment = idx_candidates[:augment_limit]  # Limit number of candidates queried by EBAnO
-            # idx_augment contains indices that refer to idx_pool_subset
+            # idx_augment contains REAL indices
 
             X_augment = []
             y_augment = []
             DEBUG_nPIR_max_f_i_array = []
             DEBUG_nPIR_arr, DEBUG_nPIRP_arr = [], []
+            DEBUG_diff = []
             # for (tf_i, (tf_x, tf_y)) in ds_pool:
             for debug_i, (tf_i, (tf_x, tf_y)) in enumerate(ds_pool):  # DEBUG
-                if tf_i.numpy() not in idx_pool_subset[idx_augment]:
+                if tf_i.numpy() not in idx_augment:
                     continue
-
-                # ds pool          6  2  8  4  7 ...
-
-                # idx_pool_subset [6, 2, 8, 4, 7, ...]
-                #                  0  1  2  3  4  ...
-                # idx_augment     [1, 3, 4, ...]   ^
-                #                  0  1  2  ...
-
-                # We need to get the index of idx_pool_subset to which
-                # the current element (pool index tf_i) corresponds.
-                i_of_idx_pool_subset = np.argwhere(idx_pool_subset == tf_i.numpy())[0,0]
-
-                # We also need to get the index of idx_augment to which the
-                # current element corresponds.
-                i_of_idx_augment = np.argwhere(idx_augment == i_of_idx_pool_subset)[0,0]
 
                 x_original = tf_x.numpy()
 
+                i_of_idx_pool_subset = np.argwhere(idx_pool_subset == tf_i.numpy())[0,0]
+
                 x_masks = X_masks[i_of_idx_pool_subset]
-                f_i = nPIR_max_f_i[i_of_idx_augment]
+                f_i = nPIR_max_f_i[i_of_idx_pool_subset]
 
                 DEBUG_nPIR_max_f_i_array.append(f_i)
                 DEBUG_nPIR_arr.append(nPIR_best[i_of_idx_pool_subset])
                 DEBUG_nPIRP_arr.append(nPIRP_best[i_of_idx_pool_subset])
+                DEBUG_diff.append(nPIR_best[i_of_idx_pool_subset][f_i] - nPIRP_best[i_of_idx_pool_subset][f_i])
 
                 x_perturbed = self.get_perturbed_image(x_original, x_masks, f_i, perturb_filter=self.explainer.perturb_filter, flip=True)
                 X_augment.append(x_perturbed)
@@ -220,8 +208,8 @@ class EBAnOQueryStrategy(QueryStrategy):
                 # DEBUG
                 import matplotlib.pyplot as plt
                 fig, ax = plt.subplots()
-                ax.imshow(x_perturbed)
-                fig.save(f"DEBUG_x_perturbed_{debug_i}.png")
+                ax.imshow(x_perturbed/255)
+                fig.savefig(f"DEBUG_x_perturbed_{debug_i}.png")
                 # /DEBUG
 
             X_augment = np.array(X_augment)
@@ -240,11 +228,13 @@ class EBAnOQueryStrategy(QueryStrategy):
                 f.write(repr(DEBUG_nPIR_arr))
                 f.write("DEBUG_nPIRP_arr")
                 f.write(repr(DEBUG_nPIRP_arr))
+                f.write("DEBUG_diff")
+                f.write(repr(DEBUG_diff))
             # /DEBUG
 
             self.ds_augment = tf.data.Dataset.from_tensor_slices((X_augment, y_augment))
 
-        return idx_pool_subset[idx_query]
+        return idx_query
 
     def ebano_process(self, X, cois, seed=None, **kwargs):
         results = self.explainer.fit_batch(

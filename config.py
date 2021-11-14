@@ -44,6 +44,7 @@ config_dict = {
     "ebano_mix_default_augment_limit": None,
     "ebano_mix_default_min_diff": 0.,
     "ebano_mix_default_eps": 0.,
+    "ebano_mix_default_subset": None,
 
     ## Base model training
     "base_lr_init": 0.1,  # VGG16: 0.01; ResNet: 0.1

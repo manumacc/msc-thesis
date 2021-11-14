@@ -112,11 +112,6 @@ class Experiment:
                 from query.mix import MixQueryStrategy
                 query_strategy = MixQueryStrategy()
 
-                if kwargs["ebano_mix_strategy"] is not None:
-                    ebano_mix_strategy = kwargs["ebano_mix_strategy"]
-                else:
-                    ebano_mix_strategy = self.config["ebano_mix_default_strategy"]
-
                 if kwargs["ebano_mix_base_strategy"] is not None:
                     ebano_mix_base_strategy = kwargs["ebano_mix_base_strategy"]
                 else:
@@ -137,10 +132,10 @@ class Experiment:
                 else:
                     ebano_mix_min_diff = self.config["ebano_mix_default_min_diff"]
 
-                if kwargs["ebano_mix_eps"] is not None:
-                    ebano_mix_eps = kwargs["ebano_mix_eps"]
+                if kwargs["ebano_mix_subset"] is not None:
+                    ebano_mix_subset = kwargs["ebano_mix_subset"]
                 else:
-                    ebano_mix_eps = self.config["ebano_mix_default_eps"]
+                    ebano_mix_subset = self.config["ebano_mix_default_subset"]
 
                 mix_iteration_methods = None
                 if qs in ["early-mix", "augment-early-mix"]:
@@ -191,12 +186,11 @@ class Experiment:
 
                 print("Mix iteration methods:", mix_iteration_methods)
                 print("Augment flag:", ebano_mix_augment)
-                print("ebano_mix strategy", ebano_mix_strategy)
                 print("ebano_mix base_strategy", ebano_mix_base_strategy)
                 print("ebano_mix query_limit", ebano_mix_query_limit)
                 print("ebano_mix augment_limit", ebano_mix_augment_limit)
                 print("ebano_mix min_diff", ebano_mix_min_diff)
-                print("ebano_mix eps", ebano_mix_eps)
+                print("ebano_mix subset", ebano_mix_subset)
 
                 query_kwargs = {
                     "mix_iteration_methods": mix_iteration_methods,
@@ -211,12 +205,11 @@ class Experiment:
                     "max_features": self.config["max_features"],
                     "use_gpu": self.config["ebano_use_gpu"],
                     "augment": ebano_mix_augment,
-                    "strategy": ebano_mix_strategy,
                     "base_strategy": ebano_mix_base_strategy,
                     "query_limit": ebano_mix_query_limit,
                     "augment_limit": ebano_mix_augment_limit,
                     "min_diff": ebano_mix_min_diff,
-                    "eps": ebano_mix_eps,
+                    "subset": ebano_mix_subset,
                     "niter": self.config["kmeans_niter"]
                 }
 

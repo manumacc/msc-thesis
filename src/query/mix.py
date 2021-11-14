@@ -21,12 +21,11 @@ class MixQueryStrategy(QueryStrategy):
                  max_features=5,
                  use_gpu=False,
                  augment=False,
-                 strategy=None,
                  base_strategy=None,
                  query_limit=None,
                  augment_limit=None,
                  min_diff=None,
-                 eps=None,
+                 subset=None,
                  **ebano_kwargs):
 
         current_method = mix_iteration_methods[current_iter]
@@ -71,12 +70,11 @@ class MixQueryStrategy(QueryStrategy):
                            max_features=max_features,
                            use_gpu=use_gpu,
                            augment=augment,
-                           strategy=strategy,
                            base_strategy=base_strategy,
                            query_limit=query_limit,
                            augment_limit=augment_limit,
                            min_diff=min_diff,
-                           eps=eps,
+                           subset=subset,
                            **ebano_kwargs)
             self.ds_augment = qs.get_ds_augment()
             return idx_query

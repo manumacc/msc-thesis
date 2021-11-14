@@ -14,12 +14,11 @@ arg_parser.add_argument("--base", action="store_true", dest="train_base")
 
 arg_parser.add_argument("--query", nargs="?", type=str, help="query strategy", dest="query")
 
-arg_parser.add_argument("--ebano-mix-strategy", nargs='?', default=None, type=str, dest="ebano_mix_strategy")
 arg_parser.add_argument("--ebano-mix-base-strategy", nargs='?', default=None, type=str, dest="ebano_mix_base_strategy")
 arg_parser.add_argument("--ebano-mix-query-limit", nargs='?', default=None, type=int, dest="ebano_mix_query_limit")
 arg_parser.add_argument("--ebano-mix-augment-limit", nargs='?', default=None, type=int, dest="ebano_mix_augment_limit")
 arg_parser.add_argument("--ebano-mix-min-diff", nargs='?', default=None, type=float, dest="ebano_mix_min_diff")
-arg_parser.add_argument("--ebano-mix-eps", nargs='?', default=None, type=float, dest="ebano_mix_eps")
+arg_parser.add_argument("--ebano-mix-subset", nargs='?', default=None, type=int, dest="ebano_mix_subset")
 
 arg_parser.add_argument("--patience", nargs='?', default=None, type=int)
 
@@ -35,9 +34,8 @@ if __name__ == '__main__':
                    seed=args.seed,
                    train_base=args.train_base,
                    query_strategy=args.query,
-                   ebano_mix_strategy=args.ebano_mix_strategy,
                    ebano_mix_base_strategy=args.ebano_mix_base_strategy,
                    ebano_mix_query_limit=args.ebano_mix_query_limit,
                    ebano_mix_augment_limit=args.ebano_mix_augment_limit,
                    ebano_mix_min_diff=args.ebano_mix_min_diff,
-                   ebano_mix_eps=args.ebano_mix_eps)
+                   ebano_mix_subset=args.ebano_mix_subset)
