@@ -187,7 +187,7 @@ class EBAnOQueryStrategy(QueryStrategy):
                 x_masks = X_masks[i_of_idx_pool_subset]
                 f_i = nPIR_max_f_i[i_of_idx_pool_subset]
 
-                x_perturbed = self.get_perturbed_image(x_original, x_masks, f_i, perturb_filter=self.explainer.perturb_filter, flip=True)
+                x_perturbed = self.get_perturbed_image(x_original, x_masks, f_i, perturb_filter=self.explainer.perturb_filter)
                 X_augment.append(x_perturbed)
                 y_augment.append(tf_y.numpy())
 
