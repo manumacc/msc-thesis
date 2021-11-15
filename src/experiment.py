@@ -25,6 +25,7 @@ class Experiment:
         if kwargs["dataset_hpc"] is not None:
             self.config["dataset_name"] = f"{kwargs['dataset_hpc']}"
             self.config["dataset_path"] = f"data/{kwargs['dataset_hpc']}"
+            self.config["n_classes"] = len(get_labels_by_name(self.config["dataset_name"]))
             print(f"Set dataset to {self.config['dataset_name']} at {self.config['dataset_path']}")
 
         start_dt = datetime.datetime.now()
