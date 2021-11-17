@@ -30,15 +30,21 @@ class Experiment:
             if kwargs["dataset_hpc"] == "imagenet-25":
                 self.config["n_query_instances"] = 1500
                 self.config["n_loops"] = 10
+                self.config["n_epochs"] = 100
                 self.config["base_model_name"] = "resnet50_imagenet25_base"
+                self.config["reduce_lr_patience"] = 25
             elif kwargs["dataset_hpc"] == "imagenet-100":
                 self.config["n_query_instances"] = 3000
-                self.config["n_loops"] = 10
+                self.config["n_loops"] = 8
+                self.config["n_epochs"] = 75
                 self.config["base_model_name"] = "resnet50_imagenet100_base"
+                self.config["reduce_lr_patience"] = 20
             elif kwargs["dataset_hpc"] == "imagenet-250":
                 self.config["n_query_instances"] = 5000
                 self.config["n_loops"] = 6
+                self.config["n_epochs"] = 60
                 self.config["base_model_name"] = "resnet50_imagenet250_base"
+                self.config["reduce_lr_patience"] = 15
 
             print(f"Set dataset to {self.config['dataset_name']} at {self.config['dataset_path']}")
 
@@ -159,49 +165,78 @@ class Experiment:
 
                 mix_iteration_methods = None
                 if qs in ["early-mix", "augment-early-mix"]:
-                    mix_iteration_methods = {
-                        0: "ebano",
-                        1: "ebano",
-                        2: "ebano",
-                        3: "ebano",
-                        4: "ebano",
-                        5: ebano_mix_base_strategy,
-                        6: ebano_mix_base_strategy,
-                        7: ebano_mix_base_strategy,
-                        8: ebano_mix_base_strategy,
-                        9: ebano_mix_base_strategy,
-                    }
+                    if kwargs["dataset_hpc"] == "imagenet-100":
+                        mix_iteration_methods = {
+                            0: "ebano",
+                            1: "ebano",
+                            2: "ebano",
+                            3: "ebano",
+                            4: ebano_mix_base_strategy,
+                            5: ebano_mix_base_strategy,
+                            6: ebano_mix_base_strategy,
+                            7: ebano_mix_base_strategy,
+                        }
+                    elif kwargs["dataset_hpc"] == "imagenet-250":
+                        mix_iteration_methods = {
+                            0: "ebano",
+                            1: "ebano",
+                            2: "ebano",
+                            3: ebano_mix_base_strategy,
+                            4: ebano_mix_base_strategy,
+                            5: ebano_mix_base_strategy,
+                        }
+                    else:
+                        mix_iteration_methods = {
+                            0: "ebano",
+                            1: "ebano",
+                            2: "ebano",
+                            3: "ebano",
+                            4: "ebano",
+                            5: ebano_mix_base_strategy,
+                            6: ebano_mix_base_strategy,
+                            7: ebano_mix_base_strategy,
+                            8: ebano_mix_base_strategy,
+                            9: ebano_mix_base_strategy,
+                        }
                 elif qs in ["late-mix", "augment-late-mix"]:
-                    mix_iteration_methods = {
-                        0: ebano_mix_base_strategy,
-                        1: ebano_mix_base_strategy,
-                        2: ebano_mix_base_strategy,
-                        3: ebano_mix_base_strategy,
-                        4: ebano_mix_base_strategy,
-                        5: "ebano",
-                        6: "ebano",
-                        7: "ebano",
-                        8: "ebano",
-                        9: "ebano",
-                    }
-                elif qs in ["full-mix", "augment-full-mix"]:
-                    mix_iteration_methods = {
-                        0: "ebano",
-                        1: "ebano",
-                        2: "ebano",
-                        3: "ebano",
-                        4: "ebano",
-                        5: "ebano",
-                        6: "ebano",
-                        7: "ebano",
-                        8: "ebano",
-                        9: "ebano",
-                    }
+                    if kwargs["dataset_hpc"] == "imagenet-100":
+                        mix_iteration_methods = {
+                            0: ebano_mix_base_strategy,
+                            1: ebano_mix_base_strategy,
+                            2: ebano_mix_base_strategy,
+                            3: ebano_mix_base_strategy,
+                            4: "ebano",
+                            5: "ebano",
+                            6: "ebano",
+                            7: "ebano",
+                        }
+                    elif kwargs["dataset_hpc"] == "imagenet-250":
+                        mix_iteration_methods = {
+                            0: ebano_mix_base_strategy,
+                            1: ebano_mix_base_strategy,
+                            2: ebano_mix_base_strategy,
+                            3: "ebano",
+                            4: "ebano",
+                            5: "ebano",
+                        }
+                    else:
+                        mix_iteration_methods = {
+                            0: ebano_mix_base_strategy,
+                            1: ebano_mix_base_strategy,
+                            2: ebano_mix_base_strategy,
+                            3: ebano_mix_base_strategy,
+                            4: ebano_mix_base_strategy,
+                            5: "ebano",
+                            6: "ebano",
+                            7: "ebano",
+                            8: "ebano",
+                            9: "ebano",
+                        }
 
                 ebano_mix_augment = None
-                if qs in ["early-mix", "late-mix", "full-mix"]:
+                if qs in ["early-mix", "late-mix"]:
                     ebano_mix_augment = False
-                elif qs in ["augment-early-mix", "augment-late-mix", "augment-full-mix"]:
+                elif qs in ["augment-early-mix", "augment-late-mix"]:
                     ebano_mix_augment = True
 
                 print("Mix iteration methods:", mix_iteration_methods)
