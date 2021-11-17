@@ -26,6 +26,20 @@ class Experiment:
             self.config["dataset_name"] = f"{kwargs['dataset_hpc']}"
             self.config["dataset_path"] = f"data/{kwargs['dataset_hpc']}"
             self.config["n_classes"] = len(get_labels_by_name(self.config["dataset_name"]))
+
+            if kwargs["dataset_hpc"] == "imagenet-25":
+                self.config["n_query_instances"] = 1500
+                self.config["n_loops"] = 10
+                self.config["base_model_name"] = "resnet50_imagenet25_base"
+            elif kwargs["dataset_hpc"] == "imagenet-100":
+                self.config["n_query_instances"] = 3000
+                self.config["n_loops"] = 10
+                self.config["base_model_name"] = "resnet50_imagenet100_base"
+            elif kwargs["dataset_hpc"] == "imagenet-250":
+                self.config["n_query_instances"] = 5000
+                self.config["n_loops"] = 6
+                self.config["base_model_name"] = "resnet50_imagenet250_base"
+
             print(f"Set dataset to {self.config['dataset_name']} at {self.config['dataset_path']}")
 
         start_dt = datetime.datetime.now()
