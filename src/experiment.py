@@ -139,6 +139,8 @@ class Experiment:
                 from query.mix import MixQueryStrategy
                 query_strategy = MixQueryStrategy()
 
+                self.config["query_batch_size"] = 32  # Stay on the safe side with BatchEBAnO
+
                 if kwargs["ebano_mix_base_strategy"] is not None:
                     ebano_mix_base_strategy = kwargs["ebano_mix_base_strategy"]
                 else:
