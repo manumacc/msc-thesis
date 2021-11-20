@@ -22,7 +22,7 @@ arg_parser.add_argument("--ebano-mix-subset", nargs='?', default=None, type=int,
 
 arg_parser.add_argument("--dataset-hpc", nargs='?', default=None, type=str, dest="dataset_hpc")
 
-arg_parser.add_argument("--patience", nargs='?', default=None, type=int)
+arg_parser.add_argument("--resume-job", nargs='?', default=None, type=str, dest="resume_job")
 
 if __name__ == '__main__':
     args = arg_parser.parse_args()
@@ -41,4 +41,5 @@ if __name__ == '__main__':
                    ebano_mix_augment_limit=args.ebano_mix_augment_limit,
                    ebano_mix_min_diff=args.ebano_mix_min_diff,
                    ebano_mix_subset=args.ebano_mix_subset,
-                   dataset_hpc=args.dataset_hpc)
+                   dataset_hpc=args.dataset_hpc,
+                   resume_job=args.resume_job)

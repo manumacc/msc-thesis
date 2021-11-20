@@ -1,4 +1,5 @@
 import pathlib
+import pickle
 
 import numpy as np
 import tensorflow as tf
@@ -263,41 +264,81 @@ class ActiveLearning:
               n_epochs,
               callbacks,
               base_model_name,
-              dir_logs=None,
+              logs_path,
+              logs_partial_path,
+              resume_job_dir=None,
               seed=None,
               **query_kwargs):
         """
         """
 
-        logs = {"train": [], "test": [], "test_preds": []}
-        pathlib.Path("logs", dir_logs).mkdir(parents=True, exist_ok=False)
+        LAST_ITER_FILE = "last_iter.txt"
 
-        print("Initializing base model")
-        self.initialize_base_model(base_model_name)
+        logs = {"train": [], "test": [], "test_preds": []}
+
+        with open(pathlib.Path(logs_partial_path, LAST_ITER_FILE), "w") as f:
+            f.write("-1")
 
         ds_val = self.get_val(batch_size)
         ds_test = self.get_test(batch_size)
 
-        print("Evaluating base model")
-        test_metrics = self.model.evaluate(ds_test)
-        logs["base_test"] = test_metrics
+        if resume_job_dir is not None:
+            resume_job_path = pathlib.Path("logs", resume_job_dir)
+            print(f"Resuming job from path {str(resume_job_path)}")
+
+            # Skip current AL loop to correct iteration
+            with open(pathlib.Path(resume_job_path, "partial", LAST_ITER_FILE)) as f:
+                last_iter = int(f.read())
+
+            skip_to_iter = last_iter + 1
+
+            # Reload last iteration's weights
+            self.model, loss_fn, optimizer, lr_init = self.model_initialization_fn()
+            self.model.compile(optimizer=optimizer, loss=loss_fn, metrics=["accuracy"])
+
+            print(f"Reloading weights from iteration #{last_iter+1} (i={last_iter})")
+            self.model.load_weights(pathlib.Path(resume_job_path, "partial", "model"))
+            backend.set_value(self.model.optimizer.lr, lr_init)
+
+            print("Evaluating reloaded model")
+            self.model.evaluate(ds_test)
+
+            # Reload logs up to last iteration
+            with open(pathlib.Path(resume_job_path, "partial", "logs_partial.pkl"), "rb") as f:
+                logs = pickle.load(f)
+
+            # Reload labeled pool indices
+            with open(pathlib.Path(resume_job_path, "partial", "idx_labeled_pool.pkl"), "rb") as f:
+                self.idx_labeled_pool = pickle.load(f)
+            print(f"Loaded labeled pool indices of length {len(self.idx_labeled_pool)}")
+        else:
+            print("Initializing base model")
+            self.initialize_base_model(base_model_name)
+
+            print("Evaluating base model")
+            test_metrics = self.model.evaluate(ds_test)
+            logs["base_test"] = test_metrics
+
+            skip_to_iter = None
 
         # Active learning loop
         for i in range(n_loops):
-            print(f"* Iteration #{i+1}")
+            print(f"* Iteration #{i+1} (i={i}) begins")
+
+            if skip_to_iter is not None and i < skip_to_iter:
+                print(f"Iteration #{i+1} (i={i}) skipped")
+                continue
 
             # Reset augmented set
             self.ds_augment = None
 
-            if i > 0:
+            if skip_to_iter is None and i > 0:
                 self.model, loss_fn, optimizer, lr_init = self.model_initialization_fn()
 
                 print("Optimizer configuration")
                 print(optimizer.get_config())
 
-                self.model.compile(optimizer=optimizer,
-                                   loss=loss_fn,
-                                   metrics=["accuracy"])
+                self.model.compile(optimizer=optimizer, loss=loss_fn, metrics=["accuracy"])
 
                 print("Setting weights to last iteration weights")
                 self.model.set_weights(self.model_weights_checkpoint)
@@ -318,7 +359,7 @@ class ActiveLearning:
 
             if self.save_models:
                 print(f"Saving model at iteration {i+1}")
-                self.model.save(pathlib.Path("logs", dir_logs, f"model_iter_{i+1}"))
+                self.model.save(pathlib.Path(logs_path, f"model_iter_{i+1}"))
 
             print("Evaluating model")
             test_metrics = self.model.evaluate(ds_test)
@@ -329,6 +370,20 @@ class ActiveLearning:
             logs["test_preds"].append(preds)
 
             self.model_weights_checkpoint = self.model.get_weights()
+
+            # Parachute: save partial model
+            skip_to_iter = None  # deactivate skipping
+
+            self.model.save_weights(
+                pathlib.Path(logs_partial_path, "model"),
+                overwrite=True
+            )
+            with open(pathlib.Path(logs_partial_path, LAST_ITER_FILE), "w") as f:
+                f.write(f"{i}")
+            with open(pathlib.Path(logs_partial_path, "logs_partial.pkl"), "wb") as f:
+                pickle.dump(logs, f)
+            with open(pathlib.Path(logs_partial_path, "idx_labeled_pool.pkl"), "wb") as f:
+                pickle.dump(self.idx_labeled_pool, f)
 
         return logs
 

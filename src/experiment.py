@@ -1,8 +1,7 @@
 import pathlib
 import datetime
 import pickle
-
-from timeit import default_timer
+import shutil
 
 import tensorflow as tf
 import tensorflow_addons as tfa
@@ -14,10 +13,13 @@ class Experiment:
     def __init__(self, config):
         self.config = config
 
-    def run(self,name, seed=None, train_base=False, query_strategy=None, **kwargs):
+    def run(self, name, seed=None, train_base=False, query_strategy=None, **kwargs):
         self.config["name"] = name
         self.config["query_strategy"] = query_strategy
         self.config["n_classes"] = len(get_labels_by_name(self.config["dataset_name"]))
+
+        resume_job_dir = kwargs["resume_job"]
+        self.config["resume_job_dir_logs"] = resume_job_dir
 
         if seed is not None:
             self.config["experiment_seed"] = seed
@@ -41,19 +43,14 @@ class Experiment:
                 self.config["reduce_lr_patience"] = 20
             elif kwargs["dataset_hpc"] == "imagenet-250":
                 self.config["n_query_instances"] = 7500
-                self.config["lr_init"] = 0.1
                 self.config["n_loops"] = 6
                 self.config["n_epochs"] = 60
                 self.config["base_model_name"] = "resnet50_imagenet250_base"
-                self.config["reduce_lr_patience"] = 15
+                self.config["reduce_lr_patience"] = 20
 
             print(f"Set dataset to {self.config['dataset_name']} at {self.config['dataset_path']}")
 
         start_dt = datetime.datetime.now()
-
-        print("Configuration:")
-        for k, v in self.config.items():
-            print(f"- {k} = {v}")
 
         # Model build
         def model_initializer(base=False):
@@ -271,6 +268,10 @@ class Experiment:
                     "niter": self.config["kmeans_niter"]
                 }
 
+        print("Configuration:")
+        for k, v in self.config.items():
+            print(f"- {k} = {v}")
+
         # Initialize active learning loop
         al_loop = al.ActiveLearning(
             dataset_name=self.config["dataset_name"],
@@ -282,6 +283,7 @@ class Experiment:
             save_models=self.config["save_models"],
         )
 
+        # Logic for training base model
         if train_base:
             callbacks = []
             from callbacks.reload_checkpoint import ReloadCheckpointOnTrainEnd
@@ -309,7 +311,6 @@ class Experiment:
             )
             callbacks.append(callback_decay)
 
-            start = default_timer()
             logs = al_loop.train_base(
                 model_name=name,
                 batch_size=self.config["batch_size"],
@@ -317,17 +318,22 @@ class Experiment:
                 callbacks=callbacks,
                 seed=self.config["experiment_seed"],
             )
-            end = default_timer()
 
             with open(pathlib.Path("models", name, "config.pkl"), "wb") as f:
                 pickle.dump(self.config, f)
             with open(pathlib.Path("models", name, "logs.pkl"), "wb") as f:
                 pickle.dump(logs, f)
-            with open(pathlib.Path("models", name, "stats.txt"), "w") as f:
-                f.write(f"Elapsed time (s): {end - start}")
 
+        # Logic for training AL iterations
         else:
             dir_logs = f"{name}_{start_dt.strftime('%Y%m%d_%H%M%S')}"
+
+            print(f"dir_logs (argument for resuming): {dir_logs}")
+
+            logs_path = pathlib.Path("logs", dir_logs)
+            logs_path.mkdir(parents=True, exist_ok=False)
+            logs_partial_path = pathlib.Path(logs_path, "partial")
+            logs_partial_path.mkdir(parents=True, exist_ok=False)
 
             callbacks = []
             from callbacks.reload_checkpoint import ReloadCheckpointOnTrainEnd
@@ -355,7 +361,10 @@ class Experiment:
             )
             callbacks.append(callback_decay)
 
-            start = default_timer()
+            print("Saving configuration")
+            with open(pathlib.Path(logs_path, "config.pkl"), "wb") as f:
+                pickle.dump(self.config, f)
+
             logs = al_loop.learn(
                 n_loops=self.config["n_loops"],
                 n_query_instances=self.config["n_query_instances"],
@@ -363,16 +372,16 @@ class Experiment:
                 n_epochs=self.config["n_epochs"],
                 callbacks=callbacks,
                 base_model_name=self.config["base_model_name"],
-                dir_logs=dir_logs,
+                resume_job_dir=resume_job_dir,
+                logs_path=logs_path,
+                logs_partial_path=logs_partial_path,
                 seed=self.config["experiment_seed"],
                 **query_kwargs,
             )
-            end = default_timer()
 
-            path_logs = pathlib.Path("logs", dir_logs)
-            with open(pathlib.Path(path_logs, "config.pkl"), "wb") as f:
-                pickle.dump(self.config, f)
-            with open(pathlib.Path(path_logs, "logs.pkl"), "wb") as f:
+            with open(pathlib.Path(logs_path, "logs.pkl"), "wb") as f:
                 pickle.dump(logs, f)
-            with open(pathlib.Path(path_logs, "stats.txt"), "w") as f:
-                f.write(f"Elapsed time (s): {end - start}")
+
+            # Delete partials dir
+            print("Delete partials directory")
+            shutil.rmtree(logs_partial_path, ignore_errors=True)
