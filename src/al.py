@@ -74,9 +74,9 @@ class ActiveLearning:
         print("Optimizer configuration")
         print(optimizer.get_config())
 
-        print("Loading base model weights")
-        path_model = pathlib.Path("models", model_name, model_name)
-        self.model.load_weights(path_model)
+        # print("Loading base model weights")
+        # path_model = pathlib.Path("models", model_name, model_name)
+        # self.model.load_weights(path_model)
 
         print("Compiling model")
         self.model.compile(optimizer=optimizer,
