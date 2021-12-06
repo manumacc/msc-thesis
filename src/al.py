@@ -338,7 +338,7 @@ class ActiveLearning:
             # Reset augmented set
             self.ds_augment = None
 
-            self.model, loss_fn, optimizer, lr_init = self.model_initialization_fn()
+            self.initialize_base_model(base_model_name)
 
             ds_pool, metadata = self.get_unlabeled_pool()
 
