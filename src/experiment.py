@@ -41,6 +41,12 @@ class Experiment:
                 self.config["n_epochs"] = 75
                 self.config["base_model_name"] = "resnet50_imagenet100_base"
                 self.config["reduce_lr_patience"] = 20
+            elif kwargs["dataset_hpc"] == "imagenet-100-plus":
+                self.config["n_query_instances"] = 3000
+                self.config["n_loops"] = 8
+                self.config["n_epochs"] = 75
+                self.config["base_model_name"] = "resnet50_imagenet100_base"
+                self.config["reduce_lr_patience"] = 20
             elif kwargs["dataset_hpc"] == "imagenet-250":
                 self.config["n_query_instances"] = 7500
                 self.config["n_loops"] = 6

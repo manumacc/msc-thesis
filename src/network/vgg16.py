@@ -6,7 +6,7 @@ def VGG16(n_classes,
           input_shape=(224, 224, 3),
           dropout_rate=0.5,
           dense_units=4096,
-          freeze_extractor=False):
+          freeze_extractor=True):
     """VGG16 model for training and inference, based on the original paper.
 
     Args:

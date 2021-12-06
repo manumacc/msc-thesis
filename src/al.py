@@ -52,14 +52,20 @@ class ActiveLearning:
         )
 
         self.n_classes = len(get_labels_by_name(dataset_name))
-        self.ds_init_len = get_size_by_name(dataset_name, "init")
+        # self.ds_init_len = get_size_by_name(dataset_name, "init")
 
-    @staticmethod
-    def _load_splits_from_tfrecord(dataset_name, dataset_path, num_parallel_reads=None):
+    def _load_splits_from_tfrecord(self, dataset_name, dataset_path, num_parallel_reads=None):
         ds_init = load_dataset_from_tfrecord(f"{dataset_name}-init", path=dataset_path, load_id=False, num_parallel_reads=num_parallel_reads, deterministic=False)
         ds_pool = load_dataset_from_tfrecord(f"{dataset_name}-pool", path=dataset_path, load_id=True, num_parallel_reads=num_parallel_reads, deterministic=True)
         ds_val = load_dataset_from_tfrecord(f"{dataset_name}-val", path=dataset_path, load_id=False, num_parallel_reads=num_parallel_reads, deterministic=True)
         ds_test = load_dataset_from_tfrecord(f"{dataset_name}-test", path=dataset_path, load_id=False, num_parallel_reads=num_parallel_reads, deterministic=True)
+
+        c_init = 0
+        for _ in ds_init:
+            c_init += 1
+        print("init", c_init)
+
+        self.ds_init_len = c_init
 
         return ds_init, ds_pool, ds_val, ds_test
 
