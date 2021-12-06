@@ -131,6 +131,50 @@ class Experiment:
                 query_kwargs = {
                     "query_batch_size": self.config["query_batch_size"],
                 }
+            elif qs == "ebano-uncertainty":
+                from query.ebano_query import EBAnOQueryStrategy
+                query_strategy = EBAnOQueryStrategy()
+                query_kwargs = {
+                    "query_batch_size": self.config["query_batch_size"],
+                    "n_classes": self.config["n_classes"],
+                    "input_shape": target_size,
+                    "layers_to_analyze": self.config["layers_to_analyze"],
+                    "hypercolumn_features": self.config["hypercolumn_features"],
+                    "hypercolumn_reduction": self.config["hypercolumn_reduction"],
+                    "clustering": self.config["clustering"],
+                    "min_features": self.config["min_features"],
+                    "max_features": self.config["max_features"],
+                    "use_gpu": self.config["ebano_use_gpu"],
+                    "augment": False,
+                    "base_strategy": self.config["ebano_base_strategy"],
+                    "query_limit": self.config["ebano_query_limit"],
+                    "augment_limit": self.config["ebano_augment_limit"],
+                    "min_diff": self.config["ebano_min_diff"],
+                    "subset": self.config["ebano_subset"],
+                    "niter": self.config["kmeans_niter"]
+                }
+            elif qs == "ebano-augment":
+                from query.ebano_query import EBAnOQueryStrategy
+                query_strategy = EBAnOQueryStrategy()
+                query_kwargs = {
+                    "query_batch_size": self.config["query_batch_size"],
+                    "n_classes": self.config["n_classes"],
+                    "input_shape": target_size,
+                    "layers_to_analyze": self.config["layers_to_analyze"],
+                    "hypercolumn_features": self.config["hypercolumn_features"],
+                    "hypercolumn_reduction": self.config["hypercolumn_reduction"],
+                    "clustering": self.config["clustering"],
+                    "min_features": self.config["min_features"],
+                    "max_features": self.config["max_features"],
+                    "use_gpu": self.config["ebano_use_gpu"],
+                    "augment": True,
+                    "base_strategy": self.config["ebano_base_strategy"],
+                    "query_limit": self.config["ebano_query_limit"],
+                    "augment_limit": self.config["ebano_augment_limit"],
+                    "min_diff": self.config["ebano_min_diff"],
+                    "subset": self.config["ebano_subset"],
+                    "niter": self.config["kmeans_niter"]
+                }
             elif qs in ["early-mix",
                         "augment-early-mix",
                         "late-mix",

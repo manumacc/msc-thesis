@@ -170,9 +170,9 @@ class EBAnOQueryStrategy(QueryStrategy):
         # Augmented dataset
         self.ds_augment = None  # reset augmented set
         if augment and len(idx_candidates) > 0:
-            print("Create ds_augment")
             idx_augment = idx_candidates[:augment_limit]  # Limit number of candidates queried by EBAnO
             # idx_augment contains REAL indices
+            print(f"Create ds_augment with {len(idx_augment)} samples")
 
             X_augment = []
             y_augment = []
