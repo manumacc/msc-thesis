@@ -65,17 +65,13 @@ class Experiment:
                 from network.vgg16 import VGG16
                 print("Instantiating VGG16 model")
                 model = VGG16(
-                    n_classes=self.config["n_classes"],
-                    dropout_rate=0.5,
-                    dense_units=4096,
-                    freeze_extractor=False
+                    n_classes=self.config["n_classes"]
                 )
             elif self.config["model"] == "ResNet50":
                 from network.resnet50 import ResNet50
                 print("Instantiating ResNet50 model")
                 model = ResNet50(
-                    n_classes=self.config["n_classes"],
-                    freeze_extractor=False
+                    n_classes=self.config["n_classes"]
                 )
 
             loss_fn = tf.keras.losses.CategoricalCrossentropy()
