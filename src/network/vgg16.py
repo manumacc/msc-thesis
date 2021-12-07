@@ -32,10 +32,10 @@ def VGG16(n_classes,
         model_base.trainable = False
 
         # Block 4
-        model_base.layers[11].trainable = True
-        model_base.layers[12].trainable = True
-        model_base.layers[13].trainable = True
-        model_base.layers[14].trainable = True
+        # model_base.layers[11].trainable = True
+        # model_base.layers[12].trainable = True
+        # model_base.layers[13].trainable = True
+        # model_base.layers[14].trainable = True
 
         # Block 5
         model_base.layers[15].trainable = True
