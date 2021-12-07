@@ -36,6 +36,7 @@ class ActiveLearning:
         self.ds_augment = None
 
         self.model = None
+        self.model_weights_checkpoint = None
         self.model_initialization_fn = model_initialization_fn
         self.save_models = save_models
 
@@ -297,16 +298,16 @@ class ActiveLearning:
 
             skip_to_iter = last_iter + 1
 
-            # # Reload last iteration's weights
-            # self.model, loss_fn, optimizer, lr_init = self.model_initialization_fn()
-            # self.model.compile(optimizer=optimizer, loss=loss_fn, metrics=["accuracy"])
-            #
-            # print(f"Reloading weights from iteration #{last_iter+1} (i={last_iter})")
-            # self.model.load_weights(pathlib.Path(resume_job_path, "partial", "model"))
-            # backend.set_value(self.model.optimizer.lr, lr_init)
-            #
-            # print("Evaluating reloaded model")
-            # self.model.evaluate(ds_test)
+            # Reload last iteration's weights
+            self.model, loss_fn, optimizer, lr_init = self.model_initialization_fn()
+            self.model.compile(optimizer=optimizer, loss=loss_fn, metrics=["accuracy"])
+
+            print(f"Reloading weights from iteration #{last_iter+1} (i={last_iter})")
+            self.model.load_weights(pathlib.Path(resume_job_path, "partial", "model"))
+            backend.set_value(self.model.optimizer.lr, lr_init)
+
+            print("Evaluating reloaded model")
+            self.model.evaluate(ds_test)
 
             # Reload logs up to last iteration
             with open(pathlib.Path(resume_job_path, "partial", "logs_partial.pkl"), "rb") as f:
@@ -338,7 +339,17 @@ class ActiveLearning:
             # Reset augmented set
             self.ds_augment = None
 
-            self.initialize_base_model(base_model_name)
+            if skip_to_iter is None and i > 0:
+                self.model, loss_fn, optimizer, lr_init = self.model_initialization_fn()
+
+                print("Optimizer configuration")
+                print(optimizer.get_config())
+
+                self.model.compile(optimizer=optimizer, loss=loss_fn, metrics=["accuracy"])
+
+                print("Setting weights to last iteration weights")
+                self.model.set_weights(self.model_weights_checkpoint)
+                backend.set_value(self.model.optimizer.lr, lr_init)
 
             ds_pool, metadata = self.get_unlabeled_pool()
 
@@ -365,9 +376,15 @@ class ActiveLearning:
             preds = self.model.predict(ds_test)
             logs["test_preds"].append(preds)
 
-            # Parachute: save partials
+            self.model_weights_checkpoint = self.model.get_weights()
+
+            # Parachute: save partial model
             skip_to_iter = None  # deactivate skipping
 
+            self.model.save_weights(
+                pathlib.Path(logs_partial_path, "model"),
+                overwrite=True
+            )
             with open(pathlib.Path(logs_partial_path, LAST_ITER_FILE), "w") as f:
                 f.write(f"{i}")
             with open(pathlib.Path(logs_partial_path, "logs_partial.pkl"), "wb") as f:
