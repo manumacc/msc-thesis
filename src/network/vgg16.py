@@ -31,6 +31,18 @@ def VGG16(n_classes,
     if freeze_extractor:
         model_base.trainable = False
 
+        # Block 4
+        model_base.layers[11].trainable = True
+        model_base.layers[12].trainable = True
+        model_base.layers[13].trainable = True
+        model_base.layers[14].trainable = True
+
+        # Block 5
+        model_base.layers[15].trainable = True
+        model_base.layers[16].trainable = True
+        model_base.layers[17].trainable = True
+        model_base.layers[18].trainable = True
+
     x = model_base.output
 
     # Dense block
