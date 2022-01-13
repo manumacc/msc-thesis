@@ -10,12 +10,12 @@ config_dict = {
     "dataset_path": "data/caltech-20-10-p10",
 
     ## Model
-    "model": "VGG16",  # ResNet50; VGG16
+    "model": "ResNet50",  # ResNet50; VGG16
     "batch_size": 128,
 
     ## Active learning
     "n_loops": 5,
-    "n_epochs": 100,
+    "n_epochs": 50,
 
     "base_model_name": None,  # Base model for AL loop, can be None if --base
     "lr_init": 0.01,  # ResNet: 0.01; VGG16: 0.001
