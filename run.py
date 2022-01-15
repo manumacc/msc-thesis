@@ -45,4 +45,7 @@ if __name__ == '__main__':
                    ebano_mix_subset=args.ebano_mix_subset,
                    dataset_hpc=args.dataset_hpc,
                    resume_job=args.resume_job,
-                   freeze_extractor=args.freeze_extractor)
+                   freeze_extractor=args.freeze_extractor,
+                   base_lr_init=args.base_lr_init,
+                   base_reduce_lr_patience=args.base_reduce_lr_patience,
+                   base_reduce_lr_min=args.base_reduce_lr_min)
