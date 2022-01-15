@@ -50,6 +50,13 @@ class Experiment:
 
             print(f"Set dataset to {self.config['dataset_name']} at {self.config['dataset_path']}")
 
+        if kwargs["base_lr_init"] is not None:
+            self.config["base_lr_init"] = kwargs["base_lr_init"]
+        if kwargs["base_reduce_lr_patience"] is not None:
+            self.config["base_reduce_lr_patience"] = kwargs["base_reduce_lr_patience"]
+        if kwargs["base_reduce_lr_min"] is not None:
+            self.config["base_reduce_lr_min"] = kwargs["base_reduce_lr_min"]
+
         start_dt = datetime.datetime.now()
 
         # Model build
@@ -65,7 +72,8 @@ class Experiment:
                 from network.resnet50 import ResNet50
                 print("Instantiating ResNet50 model")
                 model = ResNet50(
-                    n_classes=self.config["n_classes"]
+                    n_classes=self.config["n_classes"],
+                    freeze_extractor=kwargs["freeze_extractor"]
                 )
 
             loss_fn = tf.keras.losses.CategoricalCrossentropy()

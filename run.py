@@ -13,6 +13,12 @@ arg_parser.add_argument("--base", action="store_true", dest="train_base")
 arg_parser.add_argument("--query", nargs="?", type=str, help="query strategy", dest="query")
 arg_parser.add_argument("--resume-job", nargs='?', default=None, type=str, dest="resume_job")
 
+arg_parser.add_argument("--freeze-extractor", action="store_true", dest="freeze_extractor")
+
+arg_parser.add_argument("--base-lr-init", nargs="?", default=None, type=float, dest="base_lr_init")
+arg_parser.add_argument("--base-reduce-lr-patience", nargs="?", default=None, type=int, dest="base_reduce_lr_patience")
+arg_parser.add_argument("--base_reduce_lr_min", nargs="?", default=None, type=float, dest="base_reduce_lr_min")
+
 arg_parser.add_argument("--ebano-mix-base-strategy", nargs='?', default=None, type=str, dest="ebano_mix_base_strategy")
 arg_parser.add_argument("--ebano-mix-query-limit", nargs='?', default=None, type=int, dest="ebano_mix_query_limit")
 arg_parser.add_argument("--ebano-mix-augment-limit", nargs='?', default=None, type=int, dest="ebano_mix_augment_limit")
@@ -38,4 +44,5 @@ if __name__ == '__main__':
                    ebano_mix_min_diff=args.ebano_mix_min_diff,
                    ebano_mix_subset=args.ebano_mix_subset,
                    dataset_hpc=args.dataset_hpc,
-                   resume_job=args.resume_job)
+                   resume_job=args.resume_job,
+                   freeze_extractor=args.freeze_extractor)
