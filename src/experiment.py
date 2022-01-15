@@ -18,6 +18,8 @@ class Experiment:
         self.config["query_strategy"] = query_strategy
         self.config["n_classes"] = len(get_labels_by_name(self.config["dataset_name"]))
 
+        self.config["freeze_extractor"] = kwargs["freeze_extractor"]
+
         resume_job_dir = kwargs["resume_job"]
         self.config["resume_job_dir_logs"] = resume_job_dir
 
@@ -52,10 +54,17 @@ class Experiment:
 
         if kwargs["base_lr_init"] is not None:
             self.config["base_lr_init"] = kwargs["base_lr_init"]
-        if kwargs["base_reduce_lr_patience"] is not None:
-            self.config["base_reduce_lr_patience"] = kwargs["base_reduce_lr_patience"]
         if kwargs["base_reduce_lr_min"] is not None:
             self.config["base_reduce_lr_min"] = kwargs["base_reduce_lr_min"]
+
+        if kwargs["lr_init"] is not None:
+            self.config["lr_init"] = kwargs["lr_init"]
+        if kwargs["reduce_lr_min"] is not None:
+            self.config["reduce_lr_min"] = kwargs["reduce_lr_min"]
+
+        if kwargs["n_query_instances"] is not None:
+            self.config["n_query_instances"] = kwargs["n_query_instances"]
+            print("** WARNING ** If ebano_query_limit is set, remember to change it in the config.py file")
 
         start_dt = datetime.datetime.now()
 

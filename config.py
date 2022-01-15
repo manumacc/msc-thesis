@@ -18,12 +18,12 @@ config_dict = {
     "n_epochs": 50,
 
     "base_model_name": None,  # Base model for AL loop, can be None if --base
-    "lr_init": 0.01,  # ResNet: 0.01; VGG16: 0.001
+    "lr_init": 0.01,
 
     # decay_early_stopping
-    "reduce_lr_patience": 20,
-    "reduce_lr_min_delta": 0.001,  # Empirically set. ResNet: 0.001
-    "reduce_lr_min": 0.001,  # ResNet: 0.0001 (0.01/(10*2)); VGG16: 0.00001 (0.001/(10*2))
+    "reduce_lr_patience": 10,
+    "reduce_lr_min_delta": 0.001,
+    "reduce_lr_min": 0.001,
 
     # Query strategy arguments
     "n_query_instances": 1000,  # Number of instances to add at each iteration
@@ -45,10 +45,10 @@ config_dict = {
     "ebano_subset": None,
 
     ## Base model training
-    "base_lr_init": 0.01,  # VGG16: 0.01; ResNet: 0.1
-    "base_n_epochs": 200,
+    "base_lr_init": 0.001,
+    "base_n_epochs": 300,
 
-    "base_reduce_lr_patience": 25,
-    "base_reduce_lr_min_delta": 0.001,  # Empirically set for ResNet
-    "base_reduce_lr_min": 0.001,  # ResNet: 0.001 (0.1/(10*2)); VGG16: 0.0001 (0.01/(10*2))
+    "base_reduce_lr_patience": 10,
+    "base_reduce_lr_min_delta": 0.001,
+    "base_reduce_lr_min": 0.00001,
 }

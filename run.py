@@ -16,8 +16,12 @@ arg_parser.add_argument("--resume-job", nargs='?', default=None, type=str, dest=
 arg_parser.add_argument("--freeze-extractor", action="store_true", dest="freeze_extractor")
 
 arg_parser.add_argument("--base-lr-init", nargs="?", default=None, type=float, dest="base_lr_init")
-arg_parser.add_argument("--base-reduce-lr-patience", nargs="?", default=None, type=int, dest="base_reduce_lr_patience")
 arg_parser.add_argument("--base-reduce-lr-min", nargs="?", default=None, type=float, dest="base_reduce_lr_min")
+
+arg_parser.add_argument("--lr-init", nargs="?", default=None, type=float, dest="lr_init")
+arg_parser.add_argument("--reduce-lr-min", nargs="?", default=None, type=float, dest="reduce_lr_min")
+
+arg_parser.add_argument("--n-query-instances", nargs="?", default=None, type=int, dest="n_query_instances")
 
 arg_parser.add_argument("--ebano-mix-base-strategy", nargs='?', default=None, type=str, dest="ebano_mix_base_strategy")
 arg_parser.add_argument("--ebano-mix-query-limit", nargs='?', default=None, type=int, dest="ebano_mix_query_limit")
@@ -47,5 +51,7 @@ if __name__ == '__main__':
                    resume_job=args.resume_job,
                    freeze_extractor=args.freeze_extractor,
                    base_lr_init=args.base_lr_init,
-                   base_reduce_lr_patience=args.base_reduce_lr_patience,
-                   base_reduce_lr_min=args.base_reduce_lr_min)
+                   base_reduce_lr_min=args.base_reduce_lr_min,
+                   lr_init=args.lr_init,
+                   reduce_lr_min=args.reduce_lr_min,
+                   n_query_instances=args.n_query_instances)
