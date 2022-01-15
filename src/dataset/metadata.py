@@ -58,6 +58,8 @@ def get_labels_by_name(dataset_name):
         labels = IMAGENET_250_LABELS
     elif dataset_name == "caltech":
         labels = list(range(256))
+    elif dataset_name == "food":
+        labels = list(range(101))
     else:
         raise ValueError(f"Dataset {dataset_name} mapper is not available.")
 
