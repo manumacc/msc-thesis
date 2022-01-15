@@ -17,7 +17,7 @@ arg_parser.add_argument("--freeze-extractor", action="store_true", dest="freeze_
 
 arg_parser.add_argument("--base-lr-init", nargs="?", default=None, type=float, dest="base_lr_init")
 arg_parser.add_argument("--base-reduce-lr-patience", nargs="?", default=None, type=int, dest="base_reduce_lr_patience")
-arg_parser.add_argument("--base_reduce_lr_min", nargs="?", default=None, type=float, dest="base_reduce_lr_min")
+arg_parser.add_argument("--base-reduce-lr-min", nargs="?", default=None, type=float, dest="base_reduce_lr_min")
 
 arg_parser.add_argument("--ebano-mix-base-strategy", nargs='?', default=None, type=str, dest="ebano_mix_base_strategy")
 arg_parser.add_argument("--ebano-mix-query-limit", nargs='?', default=None, type=int, dest="ebano_mix_query_limit")
