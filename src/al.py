@@ -399,10 +399,24 @@ class ActiveLearning:
                    batch_size,
                    n_epochs,
                    callbacks,
+                   base_model_name=None,
                    seed=None):
+        if model_name == base_model_name:  # sanity check
+            raise ValueError("The name of the new model cannot be the same as the loaded base model!")
+
         logs = {"train": [], "test": None, "test_preds": None}
 
-        model, loss_fn, optimizer, _ = self.model_initialization_fn(base=True)
+        model, loss_fn, optimizer, lr_init = self.model_initialization_fn(base=True)
+
+        ds_test = self.get_test(batch_size)
+
+        if base_model_name is not None:
+            print(f"Reloading specified existing base model: {base_model_name}")
+            path_base_model = pathlib.Path("models", base_model_name, base_model_name)
+            model.load_weights(path_base_model)
+
+            print("Evaluating existing base model")
+            model.evaluate(ds_test)
 
         print("Optimizer configuration")
         print(optimizer.get_config())
@@ -411,6 +425,9 @@ class ActiveLearning:
         model.compile(optimizer=optimizer,
                       loss=loss_fn,
                       metrics=["accuracy"])
+
+        if base_model_name is not None:
+            backend.set_value(model.optimizer.lr, lr_init)
 
         ds_train = self.get_train(batch_size)
         ds_val = self.get_val(batch_size)
@@ -423,7 +440,6 @@ class ActiveLearning:
         logs["train"].append(history.history)
 
         print("Evaluating model")
-        ds_test = self.get_test(batch_size)
         test_metrics = model.evaluate(ds_test)
         logs["test"] = test_metrics
 

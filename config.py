@@ -17,7 +17,7 @@ config_dict = {
     "n_loops": 5,
     "n_epochs": 50,
 
-    "base_model_name": None,  # Base model for AL loop, can be None if --base
+    "base_model_name": None,  # Base model for AL loop, can be None if --base, otherwise loads specified model
     "lr_init": 0.01,
 
     # decay_early_stopping

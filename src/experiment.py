@@ -57,6 +57,8 @@ class Experiment:
         if kwargs["base_reduce_lr_min"] is not None:
             self.config["base_reduce_lr_min"] = kwargs["base_reduce_lr_min"]
 
+        if kwargs["n_epochs"] is not None:
+            self.config["n_epochs"] = kwargs["n_epochs"]
         if kwargs["lr_init"] is not None:
             self.config["lr_init"] = kwargs["lr_init"]
         if kwargs["reduce_lr_min"] is not None:
@@ -373,6 +375,7 @@ class Experiment:
                 batch_size=self.config["batch_size"],
                 n_epochs=self.config["base_n_epochs"],
                 callbacks=callbacks,
+                base_model_name=self.config["base_model_name"],
                 seed=self.config["experiment_seed"],
             )
 
