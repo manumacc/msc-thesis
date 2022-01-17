@@ -415,9 +415,6 @@ class ActiveLearning:
             path_base_model = pathlib.Path("models", base_model_name, base_model_name)
             model.load_weights(path_base_model)
 
-            print("Evaluating existing base model")
-            model.evaluate(ds_test)
-
         print("Optimizer configuration")
         print(optimizer.get_config())
 
@@ -425,6 +422,9 @@ class ActiveLearning:
         model.compile(optimizer=optimizer,
                       loss=loss_fn,
                       metrics=["accuracy"])
+
+        print("Evaluating existing base model")
+        model.evaluate(ds_test)
 
         if base_model_name is not None:
             backend.set_value(model.optimizer.lr, lr_init)
