@@ -1,18 +1,31 @@
 import tensorflow as tf
 import numpy as np
 
+from tensorflow.keras import Model
+
 
 class QueryStrategy:
     def __init__(self):
         self.model = None
         self.preprocess_input_fn = None
         self.ds_augment = None
+        self.extractor = None
 
     def set_model(self, model, preprocess_input_fn=None):
         self.model = model
         self.preprocess_input_fn = preprocess_input_fn
 
-    def __call__(self, ds_pool, metadata, n_query_instances, current_iter, seed=None):
+        # TODO: This should be abstracted away somehow. It only works on ResNet50 or VGG16.
+        if self.model.name == "resnet50":
+            feature_layer_output = self.model.layers[175].output  # take avg pool
+            self.extractor = Model(inputs=self.model.inputs,
+                                   outputs=feature_layer_output)
+        elif self.model.name == "vgg16":
+            raise NotImplementedError()
+        else:
+            raise ValueError(f"Unrecognized network {self.model.name}.")
+
+    def __call__(self, ds_pool, ds_train, metadata, n_query_instances, current_iter, seed=None):
         raise NotImplementedError("Can't call a base class")
 
     def _preprocess_pool_dataset(self, ds_pool, metadata, query_batch_size):

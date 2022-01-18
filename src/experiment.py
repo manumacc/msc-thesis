@@ -144,6 +144,12 @@ class Experiment:
                 query_kwargs = {
                     "query_batch_size": self.config["query_batch_size"],
                 }
+            elif qs == "hybrid":
+                from query.hybrid import HybridQueryStrategy
+                query_strategy = HybridQueryStrategy()
+                query_kwargs = {
+                    "query_batch_size": self.config["query_batch_size"],
+                }
             elif qs == "ebano-uncertainty":
                 from query.ebano_query import EBAnOQueryStrategy
                 query_strategy = EBAnOQueryStrategy()

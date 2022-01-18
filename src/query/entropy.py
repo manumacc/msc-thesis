@@ -5,6 +5,7 @@ from qs import QueryStrategy
 class EntropyQueryStrategy(QueryStrategy):
     def __call__(self,
                  ds_pool,
+                 ds_train,
                  metadata,
                  n_query_instances,
                  current_iter,

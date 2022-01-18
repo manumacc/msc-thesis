@@ -10,6 +10,7 @@ from utils import Profiling, ndarray_to_pil, pil_to_ndarray
 class EBAnOQueryStrategy(QueryStrategy):
     def __call__(self,
                  ds_pool,
+                 ds_train,
                  metadata,
                  n_query_instances,
                  current_iter,

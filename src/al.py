@@ -250,10 +250,10 @@ class ActiveLearning:
 
         return ds_noindex
 
-    def query(self, ds_pool, metadata, n_query_instances, current_iter, seed=None, **query_kwargs):
+    def query(self, ds_pool, ds_train, metadata, n_query_instances, current_iter, seed=None, **query_kwargs):
         self.query_strategy.set_model(self.model, self.preprocess_input_fn)
 
-        indices = self.query_strategy(ds_pool, metadata, n_query_instances, current_iter, seed=seed, **query_kwargs)
+        indices = self.query_strategy(ds_pool, ds_train, metadata, n_query_instances, current_iter, seed=seed, **query_kwargs)
         print(f"Queried {len(indices)} samples from unlabeled pool")
 
         self.idx_labeled_pool.extend(indices)
@@ -352,11 +352,11 @@ class ActiveLearning:
                 backend.set_value(self.model.optimizer.lr, lr_init)
 
             ds_pool, metadata = self.get_unlabeled_pool()
+            ds_train = self.get_train(batch_size)
 
             print("Querying unlabeled pool")
-            self.query(ds_pool, metadata, n_query_instances, current_iter=i, seed=seed, **query_kwargs)
+            self.query(ds_pool, ds_train, metadata, n_query_instances, current_iter=i, seed=seed, **query_kwargs)
 
-            ds_train = self.get_train(batch_size)
             print("Fitting model")
             history = self.model.fit(ds_train,
                                      validation_data=ds_val,
