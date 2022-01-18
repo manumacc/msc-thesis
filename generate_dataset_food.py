@@ -15,6 +15,12 @@ PATH_TEST = "images-test"
 # Food-101 contains 750 training images and 250 test images per class,
 # as defined by the .txt files detailing the split.
 
+# Total images: 101000 - Training images: 75750 - Test images: 25250
+# > Version 150 val, init p10
+#   Total elements for AL loop: 600*101 = 60600 elements - 10% = 54540 =~ 55000
+#   ==> ~55000 total elements for AL loop, starting from 10%.
+#       1100 per loop: ~ +2%
+
 
 def _bytes_feature(value):
     """Returns a bytes_list from a string / byte."""

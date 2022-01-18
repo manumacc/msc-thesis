@@ -36,6 +36,14 @@ LABEL_COUNTS = {0: 98, 1: 97, 2: 151, 3: 127, 4: 148, 5: 90, 6: 106, 7: 232, 8: 
                 255: 108}
 
 
+# Caltech-256 total elements: 29783 -- no background noise class
+
+# > Version 20 test, 10 val, p10 init (caltech-20-10-p10)
+#   Total elements for AL loop: 29783 - 20*256 - 10*256 = 22103 - 10% =~ 20000 elements
+#   ==> ~20000 elements total for AL loop, starting from 10%.
+#       1200 per loop: ~ +5%.
+
+
 def _bytes_feature(value):
     """Returns a bytes_list from a string / byte."""
     if isinstance(value, type(tf.constant(0))):
