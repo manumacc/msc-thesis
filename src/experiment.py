@@ -16,6 +16,10 @@ class Experiment:
     def run(self, name, seed=None, train_base=False, query_strategy=None, **kwargs):
         self.config["name"] = name
         self.config["query_strategy"] = query_strategy
+
+        if kwargs["dataset_hpc"] is not None:
+            self.config["dataset_name"] = f"{kwargs['dataset_hpc']}"
+
         self.config["n_classes"] = len(get_labels_by_name(self.config["dataset_name"]))
 
         self.config["freeze_extractor"] = kwargs["freeze_extractor"]
@@ -27,9 +31,6 @@ class Experiment:
             self.config["experiment_seed"] = seed
 
         if kwargs["dataset_hpc"] is not None:
-            self.config["dataset_name"] = f"{kwargs['dataset_hpc']}"
-            self.config["n_classes"] = len(get_labels_by_name(self.config["dataset_name"]))
-
             if kwargs["dataset_hpc"] == "imagenet-25":
                 self.config["dataset_path"] = f"data/{kwargs['dataset_hpc']}"
                 self.config["base_model_name"] = "resnet50_imagenet25_base"
