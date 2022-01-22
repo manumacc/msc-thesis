@@ -28,27 +28,23 @@ class Experiment:
 
         if kwargs["dataset_hpc"] is not None:
             self.config["dataset_name"] = f"{kwargs['dataset_hpc']}"
-            self.config["dataset_path"] = f"data/{kwargs['dataset_hpc']}"
             self.config["n_classes"] = len(get_labels_by_name(self.config["dataset_name"]))
 
             if kwargs["dataset_hpc"] == "imagenet-25":
-                self.config["n_query_instances"] = 1500
-                self.config["n_loops"] = 10
-                self.config["n_epochs"] = 100
+                self.config["dataset_path"] = f"data/{kwargs['dataset_hpc']}"
                 self.config["base_model_name"] = "resnet50_imagenet25_base"
-                self.config["reduce_lr_patience"] = 25
             elif kwargs["dataset_hpc"] == "imagenet-100":
-                self.config["n_query_instances"] = 3000
-                self.config["n_loops"] = 8
-                self.config["n_epochs"] = 75
+                self.config["dataset_path"] = f"data/{kwargs['dataset_hpc']}"
                 self.config["base_model_name"] = "resnet50_imagenet100_base"
-                self.config["reduce_lr_patience"] = 20
             elif kwargs["dataset_hpc"] == "imagenet-250":
-                self.config["n_query_instances"] = 7500
-                self.config["n_loops"] = 6
-                self.config["n_epochs"] = 60
+                self.config["dataset_path"] = f"data/{kwargs['dataset_hpc']}"
                 self.config["base_model_name"] = "resnet50_imagenet250_base"
-                self.config["reduce_lr_patience"] = 20
+            elif kwargs["dataset_hpc"] == "caltech":
+                self.config["dataset_path"] = f"data/caltech-test20-val10-p20"
+                self.config["base_model_name"] = "resnet_caltech_base"
+            elif kwargs["dataset_hpc"] == "food":
+                self.config["dataset_path"] = f"data/food-val250-p25"
+                self.config["base_model_name"] = "resnet_food_base"
 
             print(f"Set dataset to {self.config['dataset_name']} at {self.config['dataset_path']}")
 
