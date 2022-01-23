@@ -45,7 +45,7 @@ LABEL_COUNTS = {0: 98, 1: 97, 2: 151, 3: 127, 4: 148, 5: 90, 6: 106, 7: 232, 8: 
 
 # > Version 20 test, 10 val, p20 init (caltech-test20-val10-p20)
 #   Total elements for AL loop: 29783 - 20*256 - 10*256 = 22103 - 20% =~ 17500 elements
-#   ==> ~17500 elements total for AL loop, starting from 10%.
+#   ==> ~17500 elements total for AL loop, starting from 20%.
 #       900 per loop: ~ +5%.
 
 

@@ -49,11 +49,15 @@ class Experiment:
 
             print(f"Set dataset to {self.config['dataset_name']} at {self.config['dataset_path']}")
 
+        if kwargs["base_n_epochs"] is not None:
+            self.config["base_n_epochs"] = kwargs["base_n_epochs"]
         if kwargs["base_lr_init"] is not None:
             self.config["base_lr_init"] = kwargs["base_lr_init"]
         if kwargs["base_reduce_lr_min"] is not None:
             self.config["base_reduce_lr_min"] = kwargs["base_reduce_lr_min"]
 
+        if kwargs["n_loops"] is not None:
+            self.config["n_loops"] = kwargs["n_loops"]
         if kwargs["n_epochs"] is not None:
             self.config["n_epochs"] = kwargs["n_epochs"]
         if kwargs["lr_init"] is not None:
@@ -64,6 +68,9 @@ class Experiment:
         if kwargs["n_query_instances"] is not None:
             self.config["n_query_instances"] = kwargs["n_query_instances"]
             print("** WARNING ** If ebano_query_limit is set, remember to change it in the config.py file")
+
+        if kwargs["base_model_overwrite"] is not None:
+            self.config["base_model_name"] = kwargs["base_model_overwrite"]
 
         start_dt = datetime.datetime.now()
 

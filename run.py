@@ -16,10 +16,12 @@ arg_parser.add_argument("--freeze-extractor", action="store_true", dest="freeze_
 
 # Base model
 arg_parser.add_argument("--base", action="store_true", dest="train_base")
+arg_parser.add_argument("--base-epochs", nargs="?", default=None, type=int, dest="base_n_epochs")
 arg_parser.add_argument("--base-lr-init", nargs="?", default=None, type=float, dest="base_lr_init")
 arg_parser.add_argument("--base-reduce-lr-min", nargs="?", default=None, type=float, dest="base_reduce_lr_min")
 
 # AL
+arg_parser.add_argument("--loops", nargs="?", default=None, type=int, dest="n_loops")
 arg_parser.add_argument("--epochs", nargs="?", default=None, type=int, dest="n_epochs")
 arg_parser.add_argument("--lr-init", nargs="?", default=None, type=float, dest="lr_init")
 arg_parser.add_argument("--reduce-lr-min", nargs="?", default=None, type=float, dest="reduce_lr_min")
@@ -33,6 +35,7 @@ arg_parser.add_argument("--ebano-mix-min-diff", nargs='?', default=None, type=fl
 arg_parser.add_argument("--ebano-mix-subset", nargs='?', default=None, type=int, dest="ebano_mix_subset")
 
 arg_parser.add_argument("--dataset", nargs='?', default=None, type=str, dest="dataset_hpc")
+arg_parser.add_argument("--base-model-overwrite", nargs='?', default=None, type=str, dest="base_model_overwrite")
 
 if __name__ == '__main__':
     args = arg_parser.parse_args()
@@ -52,10 +55,13 @@ if __name__ == '__main__':
                    ebano_mix_min_diff=args.ebano_mix_min_diff,
                    ebano_mix_subset=args.ebano_mix_subset,
                    dataset_hpc=args.dataset_hpc,
+                   base_model_overwrite=args.base_model_overwrite,
                    resume_job=args.resume_job,
                    freeze_extractor=args.freeze_extractor,
+                   base_n_epochs=args.base_n_epochs,
                    base_lr_init=args.base_lr_init,
                    base_reduce_lr_min=args.base_reduce_lr_min,
+                   n_loops=args.n_loops,
                    n_epochs=args.n_epochs,
                    lr_init=args.lr_init,
                    reduce_lr_min=args.reduce_lr_min,
