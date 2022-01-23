@@ -34,7 +34,7 @@ arg_parser.add_argument("--ebano-mix-augment-limit", nargs='?', default=None, ty
 arg_parser.add_argument("--ebano-mix-min-diff", nargs='?', default=None, type=float, dest="ebano_mix_min_diff")
 arg_parser.add_argument("--ebano-mix-subset", nargs='?', default=None, type=int, dest="ebano_mix_subset")
 
-arg_parser.add_argument("--dataset", nargs='?', default=None, type=str, dest="dataset_hpc")
+arg_parser.add_argument("--dataset-hpc", nargs='?', default=None, type=str, dest="dataset_hpc")
 arg_parser.add_argument("--base-model-overwrite", nargs='?', default=None, type=str, dest="base_model_overwrite")
 
 if __name__ == '__main__':
