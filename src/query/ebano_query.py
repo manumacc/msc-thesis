@@ -17,6 +17,8 @@ class EBAnOQueryStrategy(QueryStrategy):
                  seed=None,
                  query_batch_size=None,
                  **query_kwargs):
+        SUBSET_TYPE = "entropy"  # either "random" or "entropy"
+
         augment = query_kwargs["augment"]
         base_strategy = query_kwargs["base_strategy"]
         query_limit = query_kwargs["query_limit"]
@@ -37,9 +39,16 @@ class EBAnOQueryStrategy(QueryStrategy):
                 print(f"Setting subset size equal to pool size.")
                 idx_to_process = idx_pool
             else:
-                # Subset is taken randomly from the unlabeled pool
-                rng = np.random.default_rng(seed)
-                idx_to_process = rng.choice(idx_pool, size=query_kwargs["subset"], replace=False)
+                if SUBSET_TYPE == "random":
+                    # Subset is taken randomly from the unlabeled pool
+                    rng = np.random.default_rng(seed)
+                    idx_to_process = rng.choice(idx_pool, size=query_kwargs["subset"], replace=False)
+                elif SUBSET_TYPE == "entropy":
+                    entropy = -np.sum(preds * np.log(preds), axis=-1)
+                    idx_sorted = np.argsort(entropy)[::-1]  # Descending order
+                    idx_to_process = idx_pool[idx_sorted[:query_kwargs["subset"]]]
+                else:
+                    raise ValueError(f"Unrecognized subset type {SUBSET_TYPE}")
                 print(f"Fetched a subset of size {len(idx_to_process)} over {len(idx_pool)}")
         else:
             idx_to_process = idx_pool
