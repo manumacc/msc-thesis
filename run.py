@@ -28,6 +28,12 @@ arg_parser.add_argument("--reduce-lr-min", nargs="?", default=None, type=float, 
 
 arg_parser.add_argument("--n-query-instances", nargs="?", default=None, type=int, dest="n_query_instances")
 
+arg_parser.add_argument("--ebano-base-strategy", nargs='?', default=None, type=str, dest="ebano_base_strategy")
+arg_parser.add_argument("--ebano-query-limit", nargs='?', default=None, type=int, dest="ebano_query_limit")
+arg_parser.add_argument("--ebano-augment-limit", nargs='?', default=None, type=int, dest="ebano_augment_limit")
+arg_parser.add_argument("--ebano-min-diff", nargs='?', default=None, type=float, dest="ebano_min_diff")
+arg_parser.add_argument("--ebano-subset", nargs='?', default=None, type=int, dest="ebano_subset")
+
 arg_parser.add_argument("--ebano-mix-base-strategy", nargs='?', default=None, type=str, dest="ebano_mix_base_strategy")
 arg_parser.add_argument("--ebano-mix-query-limit", nargs='?', default=None, type=int, dest="ebano_mix_query_limit")
 arg_parser.add_argument("--ebano-mix-augment-limit", nargs='?', default=None, type=int, dest="ebano_mix_augment_limit")
@@ -49,6 +55,11 @@ if __name__ == '__main__':
                    seed=args.seed,
                    train_base=args.train_base,
                    query_strategy=args.query,
+                   ebano_base_strategy=args.ebano_base_strategy,
+                   ebano_query_limit=args.ebano_query_limit,
+                   ebano_augment_limit=args.ebano_augment_limit,
+                   ebano_min_diff=args.ebano_min_diff,
+                   ebano_subset=args.ebano_subset,
                    ebano_mix_base_strategy=args.ebano_mix_base_strategy,
                    ebano_mix_query_limit=args.ebano_mix_query_limit,
                    ebano_mix_augment_limit=args.ebano_mix_augment_limit,

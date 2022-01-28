@@ -72,6 +72,17 @@ class Experiment:
         if kwargs["base_model_overwrite"] is not None:
             self.config["base_model_name"] = kwargs["base_model_overwrite"]
 
+        if kwargs["ebano_base_strategy"] is not None:
+            self.config["ebano_base_strategy"] = kwargs["ebano_base_strategy"]
+        if kwargs["ebano_query_limit"] is not None:
+            self.config["ebano_query_limit"] = kwargs["ebano_query_limit"]
+        if kwargs["ebano_augment_limit"] is not None:
+            self.config["ebano_augment_limit"] = kwargs["ebano_augment_limit"]
+        if kwargs["ebano_min_diff"] is not None:
+            self.config["ebano_min_diff"] = kwargs["ebano_min_diff"]
+        if kwargs["ebano_subset"] is not None:
+            self.config["ebano_subset"] = kwargs["ebano_subset"]
+
         start_dt = datetime.datetime.now()
 
         # Model build
