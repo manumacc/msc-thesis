@@ -101,6 +101,15 @@ class Experiment:
                     n_classes=self.config["n_classes"],
                     freeze_extractor=kwargs["freeze_extractor"]
                 )
+            elif self.config["model"] == "ResNet50Dropout":
+                from network.resnet50_dropout import ResNet50Dropout
+                print("Instantiating ResNet50 (dropout) model")
+                model = ResNet50Dropout(
+                    n_classes=self.config["n_classes"],
+                    freeze_extractor=kwargs["freeze_extractor"]
+                )
+            else:
+                raise ValueError(f"Model {self.config['model']} not implemented")
 
             loss_fn = tf.keras.losses.CategoricalCrossentropy()
             lr_init = self.config["lr_init"] if not base else self.config["base_lr_init"]
@@ -108,7 +117,7 @@ class Experiment:
             weight_decay = None
             if self.config["model"] == "VGG16":
                 weight_decay = 5e-4
-            elif self.config["model"] == "ResNet50":
+            elif self.config["model"] == "ResNet50" or self.config["model"] == "ResNet50Dropout":
                 weight_decay = 1e-4
 
             print(f"Weight decay set to {weight_decay}")
@@ -128,7 +137,7 @@ class Experiment:
         if self.config["model"] == "VGG16":
             preprocess_fn = tf.keras.applications.vgg16.preprocess_input
             target_size = (224, 224)
-        elif self.config["model"] == "ResNet50":
+        elif self.config["model"] == "ResNet50" or self.config["model"] == "ResNet50Dropout":
             preprocess_fn = tf.keras.applications.resnet50.preprocess_input
             target_size = (224, 224)
 
