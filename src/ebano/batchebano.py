@@ -123,17 +123,16 @@ class Explainer:
 
     def cluster_hypercolumns(self,
                              hc,
-                             min_features=2,
-                             max_features=5,
+                             k_features=(3,5),
                              clustering="minibatchkmeans",
                              seed=None,
                              use_gpu=False,
                              **kwargs):
-        # Each image has (max_features-min_features+1) feature maps, i.e., one
+        # Each image has len(k_features) feature maps, i.e., one
         # for each possible number of clusters. The best clustering will be
         # computed *later*, for now we need to save all possible maps.
-        feature_maps = np.empty((hc.shape[0], max_features-min_features+1, *self.input_shape),
-                                dtype=np.uint8)  # (batch_size, max_features-min_features+1, x, y)
+        feature_maps = np.empty((hc.shape[0], len(k_features), *self.input_shape),
+                                dtype=np.uint8)  # (batch_size, len(k_features), x, y)
 
         if clustering == "faisskmeans":
             d = hc.shape[-1]  # number of features
@@ -149,7 +148,7 @@ class Explainer:
                 # print(index.is_trained)
                 # print(index.ntotal)
 
-                for n_clusters in range(min_features, max_features+1):
+                for clustering_idx, n_clusters in enumerate(k_features):
                     kmeans = faiss.Clustering(d, n_clusters)
                     kmeans.verbose = bool(0)
                     kmeans.niter = kwargs["niter"]
@@ -157,10 +156,10 @@ class Explainer:
                     kmeans.train(hc[i], index)
                     _, I = index.search(hc[i], 1)
                     # feature_map = I.squeeze()
-                    feature_maps[i, n_clusters-min_features] = I.reshape(*self.input_shape).astype(np.uint8)
+                    feature_maps[i, clustering_idx] = I.reshape(*self.input_shape).astype(np.uint8)
 
         else:
-            for n_clusters in range(min_features, max_features+1):
+            for clustering_idx, n_clusters in enumerate(k_features):
                 if clustering == "minibatchkmeans":
                     model = MiniBatchKMeans(n_clusters=n_clusters, random_state=seed, max_iter=kwargs["cluster_max_iter"], batch_size=kwargs["cluster_batch_size"])
                 elif clustering == "kmeans":
@@ -170,12 +169,12 @@ class Explainer:
 
                 for i in range(len(hc)):
                     feature_map = model.fit_predict(hc[i])
-                    feature_maps[i, n_clusters-min_features] = feature_map.reshape(*self.input_shape).astype(np.uint8)
+                    feature_maps[i, clustering_idx] = feature_map.reshape(*self.input_shape).astype(np.uint8)
 
         feature_maps += 1  # start labels from 1 instead of 0
         return feature_maps
 
-    def generate_perturbation_masks(self, X, feature_maps, min_features=2):
+    def generate_perturbation_masks(self, X, feature_maps, k_features=(3,5)):
         # Each image (first dim of X) has 2 masks (perturbed images) for k=2,
         # 3 masks for k=3, ..., 5 masks for k=5. So in total, (2+3+4+5 masks).
         # This can be generalized to any k.
@@ -189,9 +188,9 @@ class Explainer:
         X_masks_map = []
         X_masks_labels = []
         for i in range(feature_maps.shape[1]):
-            n_masks += min_features + i
-            X_masks_map.extend([i] * (min_features + i))
-            X_masks_labels.extend([x for x in range(1, min_features + i + 1)])
+            n_masks += k_features[i]
+            X_masks_map.extend([i] * k_features[i])
+            X_masks_labels.extend([x for x in range(1, k_features[i] + 1)])
 
         X_masks = np.empty((len(X), n_masks, *self.input_shape), dtype=np.uint8)  # (batch_size, total num of masks, x, y)
 
@@ -396,8 +395,7 @@ class Explainer:
                   hypercolumn_features=30,
                   hypercolumn_reduction="pca",
                   clustering="minibatchkmeans",
-                  min_features=2,
-                  max_features=5,
+                  k_features=(3,5),
                   display_plots=True,
                   return_results=False,
                   use_gpu=False,
@@ -406,17 +404,15 @@ class Explainer:
         """Fit explainer to a batch of images.
 
         Args:
-            X: Array of (unprocessed) images to explain.
-            cois: Classes of interest.
+            X: Array of unprocessed images to explain.
+            cois: Array of classes of interest.
             y: Ground truth, useful for debugging purposes. Ignored otherwise.
             preprocess_input_fn: Preprocessing function to apply to the array.
-            hypercolumn_features:
-            hypercolumn_reduction:
-            clustering:
-            min_features:
-            max_features:
-            display_plots: If True, create and display visual explanations.
-                Otherwise, only compute indices.
+            hypercolumn_features: Number of features per hypercolumn to retain via dimensionality reduction.
+            hypercolumn_reduction: Type of dimensionality reduction for hypercolumns.
+            clustering: Hypercolumn clustering technique.
+            k_features: Tuple containing candidate number of clusters (e.g., (3,5) will process K=3 and K=5).
+            display_plots: If True, create and display visual explanations. Otherwise, only compute indices.
             return_results:
             use_gpu:
             seed: Seed for reproducibility.
@@ -429,14 +425,13 @@ class Explainer:
         del hc
 
         feature_maps = self.cluster_hypercolumns(hc_r,
-                                                 min_features=min_features,
-                                                 max_features=max_features,
+                                                 k_features=k_features,
                                                  clustering=clustering,
                                                  seed=seed,
                                                  use_gpu=use_gpu,
                                                  **kwargs)
 
-        X_masks, X_masks_map = self.generate_perturbation_masks(X, feature_maps, min_features=min_features)
+        X_masks, X_masks_map = self.generate_perturbation_masks(X, feature_maps, k_features=k_features)
         del feature_maps
 
         X_perturbed, X_perturbed_origin_map = self.perturb(X, X_masks)
@@ -450,7 +445,7 @@ class Explainer:
 
         if display_plots:
             for i in range(len(X)):
-                print(f"# image {i}, best explanation k={best[i]+min_features}")
+                print(f"# image {i}, best explanation k={k_features[best[i]]}")
                 print(f"# coi (pred): {cois[i]} ground truth: {y[i]} correctly classified: {cois[i] == y[i]}")
                 k_best = best[i]
                 mask = X_masks_map == k_best
@@ -474,7 +469,7 @@ class Explainer:
                     "X_original": X[i],
                     "truth": y[i] if y is not None else None,
                     "preds": preds_original[i],
-                    "best_n_features": best[i]+min_features,
+                    "best_n_features": k_features[best[i]],
                     "X_masks": X_masks[i][best_mask],
                     "nPIR_best": nPIR[i][best_mask],
                     "nPIRP_best": nPIRP[i][best_mask],
