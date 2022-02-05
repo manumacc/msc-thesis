@@ -19,9 +19,8 @@ def ResNet50Dropout(n_classes,
     x = model_base.output
 
     # Classifier
-
     x = layers.GlobalAveragePooling2D(name='avg_pool')(x)
-    x = layers.Dropout(rate=dropout_prob, training=True)(x)  # activate at inference time as well
+    x = layers.Dropout(rate=dropout_prob)(x, training=True)  # dropout is active at inference time as well
     output = layers.Dense(n_classes, activation='softmax', name='predictions')(x)
 
     # Model definition
